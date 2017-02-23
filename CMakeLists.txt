@@ -1,17 +1,18 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(qpoases)
 
-find_package(catkin REQUIRED)
+find_package(catkin REQUIRED COMPONENTS roscpp)
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ${PROJECT_NAME})
+  LIBRARIES ${PROJECT_NAME}
+  CATKIN_DEPENDS roscpp)
 
 ##############
 ## Building ##
 ##############
 
-include_directories(include)
+include_directories(include ${catkin_INCLUDE_DIRS})
 
 #
 # suppress any printline output from qpOASES
@@ -59,6 +60,11 @@ foreach(EXAMPLE ${EXAMPLES})
   add_executable(${EXAMPLE} examples/${EXAMPLE}.cpp)
   target_link_libraries(${EXAMPLE} ${PROJECT_NAME})
 endforeach(EXAMPLE)
+
+add_executable(vel_example examples/vel_example.cpp)
+target_link_libraries(vel_example ${PROJECT_NAME} ${catkin_LIBRARIES})
+
+catkin_package(CATKIN_DEPENDS roscpp)
 
 ################
 ## Installing ##
