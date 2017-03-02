@@ -49,8 +49,8 @@ set(EXAMPLES
   example1a
   example1b
   example2
-  example3
-  example3b
+  #example3
+  #example3b
   example4
   example5
   exampleLP
@@ -61,8 +61,15 @@ foreach(EXAMPLE ${EXAMPLES})
   target_link_libraries(${EXAMPLE} ${PROJECT_NAME})
 endforeach(EXAMPLE)
 
+
 add_executable(vel_example examples/vel_example.cpp)
 target_link_libraries(vel_example ${PROJECT_NAME} ${catkin_LIBRARIES})
+
+add_executable(dof2 examples/dof2.cpp)
+target_link_libraries(dof2 ${PROJECT_NAME} ${catkin_LIBRARIES})
+
+add_executable(joint_eef_goal examples/joint_eef_goal.cpp)
+target_link_libraries(joint_eef_goal ${PROJECT_NAME} ${catkin_LIBRARIES})
 
 catkin_package(CATKIN_DEPENDS roscpp)
 
