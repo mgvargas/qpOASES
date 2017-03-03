@@ -33,9 +33,10 @@ def main():
 
     # Setup data of QP.
     # Weights.  
-    w1 = 1e-6  
-    w2 = 1e-4  
-    w3 = 10  
+    w1 = 1e-4
+    w2 = 2e-4
+    w3 = 1
+    w4 = 1  # joint goal
     # Joint limits.
     q0_min = -0.05  
     q0_max = 0.05  
@@ -46,17 +47,17 @@ def main():
     l2 = 0.2  
     l3 = 0.3  
     # Initial joint values.
-    q0 = 0.02
-    q1 = 0.05
+    q0 = -0.02
+    q1 = 0.0
     # Joint target.
-    q_des = 0.7
-    q0_des = 0.0
-    q1_des = 0.1
+    q_des = 0.78
+    q0_des = 0.03
+    q1_des = 0.05
     q0_goal = True
-    q1_goal = False
+    q1_goal = True
     # Slack limits.
-    e_min = -1000
     e_max = 1000
+    e0_max = 1000
     # Velocity limits.(+-)
     v0_max = 0.05
     v1_max = 0.1
@@ -66,50 +67,64 @@ def main():
     # Others
     precision = 1e-4
     joint_precision = 5e-3
-    p = 10
+    p = 1
+    pj = 1
     q_eef = l1 + l2 + l3 + q0 + q1
     error = p * (q_des - q_eef)
     vel_init = 0
-    v0_old = 0
-    v1_old = 0
     nWSR = np.array([100])
 
     # Acceleration
     a0_const = (v0_max - a0_max) / v0_max
     a1_const = (v1_max - a1_max) / v1_max
 
-    example = SQProblem(3, 7)
+    example = SQProblem(4, 7)
 
-    H = np.array([w1, 0.0, 0.0, 0.0, w2, 0.0, 0.0, 0.0, w3]).reshape((3,3))
-    A = np.array([ 1.0, 1.0, 1.0, \
-                   1.0, 0.0, 0.0, \
-                   0.0, 1.0, 0.0, \
-                   1.0, 0.0, 0.0, \
-                   0.0, 1.0, 0.0, \
-                   0.0, 0.0, 0.0, \
-                   0.0, 0.0, 0.0]).reshape((7,3))
-    g = np.array([0.0, 0.0, 0.0])
-    lb = np.array([-v0_max, -v1_max, e_min])
-    ub = np.array([v0_max, v1_max, e_max])
+    H = np.array([w1, 0.0, 0.0, 0.0,
+                  0.0, w2, 0.0, 0.0,
+                  0.0, 0.0, w3, 0.0,
+                  0.0, 0.0, 0.0, w4]).reshape((4, 4))
+
+    A = np.array([ 1.0, 1.0, 1.0, 0.0,
+                   1.0, 0.0, 0.0, 0.0,
+                   0.0, 1.0, 0.0, 0.0,
+                   1.0, 0.0, 0.0, 0.0,
+                   0.0, 1.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0]).reshape((7, 4))
+
+    g = np.array([0.0, 0.0, 0.0, 0.0])
+    lb = np.array([-v0_max, -v1_max, -e_max, -e0_max])
+    ub = np.array([v0_max, v1_max, e_max, e0_max])
     lbA = np.array([error, (q0_min - q0), (q1_min - q0), -a0_max, -a1_max, 0, 0])
     ubA = np.array([error, (q0_max - q0), (q1_max - q0), a0_max, a1_max, 0, 0])
 
     # Setting up QProblem object.
     if q0_goal is False and q1_goal is False:
         print("\nNo joint goal specified\n")
-
     elif (q0_goal is True and q1_goal is False) or (q0_goal is False and q1_goal is True):
         if q0_goal is True:
             lbA[5] = (q0_des-q0)
             ubA[5] = (q0_des-q0)
             A[5, 0] = 1.0
+            A[5, 3] = 1.0
         else:
             lbA[5] = (q1_des-q1)
             ubA[5] = (q1_des-q1)
-            A[6, 0] = 1.0
+            A[5, 1] = 1.0
+            A[5, 3] = 1.0
     else:
-        A[15] = 1.0
-        A[19] = 1.0
+        A[0, 0] = 0.0
+        A[0, 1] = 0.0
+        A[0, 2] = 0.0
+        A[5, 0] = 1.0
+        A[5, 2] = 1.0
+        A[6, 1] = 1.0
+        A[6, 3] = 1.0
+        p = 0
+        error = 0
+        lbA[0] = 0
+        ubA[0] = 0
 
     options = Options()
     options.setToReliable()
@@ -118,17 +133,18 @@ def main():
 
     print("Init pos = %g,  goal = %g, error = %g, q0 =%g, q1 = %g\n" %
           (q_eef, q_des, error, q0, q1))
+    print A
 
     i = 0
     limit = abs(error)
     first = True
     ok = False
-    Opt = np.zeros(3)
+    Opt = np.zeros(4)
 
     # ROS Message definition
     vel_pos = JointState()
     vel_pos.header.frame_id = "q0"  
-    vel_pos.position.append(q_eef)
+    vel_pos.position.append(q0)
     vel_pos.velocity.append(vel_init)
     vel_pos.effort.append(error)
     vel_pos.effort.append(0)
@@ -137,17 +153,15 @@ def main():
     vel_pos.header.stamp = rospy.Time.now()
     rospy.sleep(0.2)
 
-    print 'hi '
     return_value = example.init(H, g, A, lb, ub, lbA, ubA, nWSR)
 
     if return_value != returnValue.SUCCESSFUL_RETURN:
-        print "Init of QP-Problem returned without success! ERROR MESSAGE: ", returnValue.INIT_FAILED()
+        print "Init of QP-Problem returned without success! ERROR MESSAGE: "
         return -1
 
     while not rospy.is_shutdown():
-            while limit > precision or not ok and i < 600:
+            while (limit > precision or not ok) and i < 2000:
                 if first is True:
-                    print 'again \n'
                     joint_pub.publish(vel_pos)
                 else:
                     # Solve QP.
@@ -164,9 +178,6 @@ def main():
                     ubA[3] = a0_const * Opt[0] + a0_max
                     ubA[4] = a1_const * Opt[1] + a1_max
 
-                    print "\n lbA[5] = %g, lbA[6] = %g" % (lbA[5], lbA[6])
-                    print "\n ubA[5] = %g, ubA[6] = %g \n" % (ubA[5], ubA[6])
-
                     return_value = example.hotstart(H, g, A, lb, ub, lbA, ubA, nWSR)
 
                     if return_value != returnValue.SUCCESSFUL_RETURN:
@@ -175,40 +186,44 @@ def main():
 
                     # Get and  print solution of QP.
                     example.getPrimalSolution(Opt)
-                    q0 += Opt[0] / 100
-                    q1 += Opt[1] / 100
+                    q0 += Opt[0] /100
+                    q1 += Opt[1] /100
                     q_eef = l1 + l2 + l3 + q0 + q1
                     error = p * (q_des - q_eef)
                     limit = abs(error)
 
-                    print "\nOpt = [ %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n a0 = %g a1 = %g \n" % (
-                    Opt[0], Opt[1], Opt[2], q_eef, error, q0, q1, (Opt[0] - v0_old), (Opt[1] - v1_old))
+                    print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n" % (
+                    Opt[0], Opt[1], Opt[2], Opt[3], q_eef, error, q0, q1)
 
                     # Depending on joint goals
                     if q0_goal is False and q1_goal is False:
-                        pass
+                        ok = True
+                        error = 0
+                        limit = 0
                     elif q0_goal is True and q1_goal is False:
-                        lbA[5] = q0_des - q0
-                        ubA[5] = q0_des - q0
+                        lbA[5] = pj * (q0_des - q0)
+                        ubA[5] = pj * (q0_des - q0)
                         if abs(lbA[5]) < joint_precision:
                             ok = True
                             print "\n q0_error = %g, i = %g \n" % (lbA[5], i)
+                        else:
+                            ok = False
                     elif q0_goal is False and q1_goal is True:
-                        lbA[5] = q1_des - q1
-                        ubA[5] = q1_des - q1
+                        lbA[5] = pj * (q1_des - q1)
+                        ubA[5] = pj * (q1_des - q1)
                         if abs(lbA[5]) < joint_precision:
                             ok = True
-                            print "\n q0_error = %g, prec = %g \n" % (lbA[5], precision)
+                            print "\n q0_error = %g, i = %g \n" % (lbA[5], i)
                     else:
-                        lbA[5] = q0_des - q0
-                        ubA[5] = q0_des - q0
-                        lbA[6] = q1_des - q1
-                        ubA[6] = q1_des - q1
+                        lbA[5] = pj * (q0_des - q0)
+                        ubA[5] = pj * (q0_des - q0)
+                        lbA[6] = pj * (q1_des - q1)
+                        ubA[6] = pj * (q1_des - q1)
                         if abs(lbA[5]) < joint_precision:
                             ok = True
                             print "\n q0_error = %g, q1_error = %g \n" % (lbA[5], lbA[6])
 
-                    vel_pos.position[0] = q_eef
+                    vel_pos.position[0] = q0
                     vel_pos.velocity[0] = Opt[0]
                     vel_pos.effort[0] = error
                     vel_pos.effort[1] = Opt[1]
@@ -219,7 +234,7 @@ def main():
                     joint_pub.publish(vel_pos)
 
                 first = False
-
+            print ok
             return 0
 
 

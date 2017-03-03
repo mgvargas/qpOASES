@@ -34,7 +34,7 @@ int main(int argc, char **argv)
     float q1 = 0.05;
     /* Joint target. */
     float q_des = 0.7;
-    float q0_des = 0.0;
+    float q0_des = -0.02;
     float q1_des = 0.1;
     bool q0_goal = true;
     bool q1_goal = false;
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
         else {
             lbA[5] = (q1_des-q1);
             ubA[5] = (q1_des-q1);
-            A[19] = 1.0;
+            A[16] = 1.0;
         }
     }
     else {
