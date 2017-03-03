@@ -4,7 +4,7 @@
 #include "sensor_msgs/JointState.h"
 
 
-/** Example for obtaining the velocity for 1DOF using the QProblem class. */
+/** Example for obtaining the velocity for 2DOF setting a goal for the EEF and for one joint. */
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "controller_1dof");
