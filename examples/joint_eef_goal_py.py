@@ -33,8 +33,8 @@ def main():
 
     # Setup data of QP.
     # Weights.  
-    w1 = 1e-4
-    w2 = 2e-4
+    w1 = 1e-3
+    w2 = 1e-3
     w3 = 1
     w4 = 1  # joint goal
     # Joint limits.
@@ -47,14 +47,14 @@ def main():
     l2 = 0.2  
     l3 = 0.3  
     # Initial joint values.
-    q0 = -0.02
-    q1 = 0.0
+    q0 = 0.02
+    q1 = -0.15
     # Joint target.
-    q_des = 0.78
-    q0_des = 0.03
+    q_des = 0.75
+    q0_des = 0.02
     q1_des = 0.05
     q0_goal = True
-    q1_goal = True
+    q1_goal = False
     # Slack limits.
     e_max = 1000
     e0_max = 1000
@@ -65,7 +65,7 @@ def main():
     a0_max = 0.05 * 0.5
     a1_max = 0.1 * 0.5
     # Others
-    precision = 1e-4
+    precision = 1e-3
     joint_precision = 5e-3
     p = 1
     pj = 1
@@ -145,6 +145,8 @@ def main():
     vel_pos = JointState()
     vel_pos.header.frame_id = "q0"  
     vel_pos.position.append(q0)
+    vel_pos.position.append(q1)
+    vel_pos.position.append(q_eef)
     vel_pos.velocity.append(vel_init)
     vel_pos.effort.append(error)
     vel_pos.effort.append(0)
@@ -219,11 +221,13 @@ def main():
                         ubA[5] = pj * (q0_des - q0)
                         lbA[6] = pj * (q1_des - q1)
                         ubA[6] = pj * (q1_des - q1)
-                        if abs(lbA[5]) < joint_precision:
+                        if abs(lbA[5]) < joint_precision and abs(lbA[6]) < joint_precision:
                             ok = True
                             print "\n q0_error = %g, q1_error = %g \n" % (lbA[5], lbA[6])
 
                     vel_pos.position[0] = q0
+                    vel_pos.position[1] = q1
+                    vel_pos.position[2] = q_eef
                     vel_pos.velocity[0] = Opt[0]
                     vel_pos.effort[0] = error
                     vel_pos.effort[1] = Opt[1]

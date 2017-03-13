@@ -212,6 +212,7 @@ def main():
 
             data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g2]
             plotly.offline.plot(data, filename='multiple_goals.html')
+
             print "\n i = %g \n" % i
             return 0
 
