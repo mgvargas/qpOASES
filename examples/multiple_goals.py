@@ -36,7 +36,7 @@ def main():
     # Weights.
     w1 = 1e-3
     w2 = 1e-3
-    w3 = 10  # goal 1 weight
+    w3 = .10  # goal 1 weight
     w4 = .1  # goal 2 weight
     # Joint limits.
     q0_max = 0.05
@@ -196,7 +196,7 @@ def main():
                 mode='lines+markers', name='pos_1')
             t_v0 = go.Scatter(
                 y=vel_0, x=t,
-                mode='lines+markers', name='vel0')
+                mode='lines+markers', name='vel_0')
             t_v1 = go.Scatter(
                 y=vel_1, x=t,
                 mode='lines+markers', name='vel_1')

@@ -27,21 +27,27 @@ from tf.msg import tfMessage
 class SelectGoal:
     def __init__(self):
         rospy.init_node('goal_selector', anonymous=True)
-        r = rospy.Rate(20)
+        r = rospy.Rate(2)
         self.objects = rospy.Subscriber('/found_objects', Object, self.callback_obj)
         self.listener = tf.TransformListener(False, rospy.Duration(1))
+        self.grasping_poses = []
         self.object_list = []
         self.old_list =[]
+
+        # Gripper frames:
+        self.grip_left = '/left_gripper_tool_frame'
+        self.grip_right = '/right_gripper_tool_frame'
+
 
     def callback_obj(self, data):
         obj = data.data
         if len(obj) > 0:
             self.object_list = obj
 
+    # TODO: Change to a smarter selector (from a ROS Topic maybe)
     def object_selector(self):
         # From the found objects, select one to grasp
         if self.old_list != self.object_list:
-            print self.old_list
             for obj in self.object_list:
                 if obj == 'bowl':
                     self.goal_obj = obj
@@ -53,10 +59,36 @@ class SelectGoal:
         rospy.wait_for_service('object_grasping_poses')
         try:
             g_p = rospy.ServiceProxy('object_grasping_poses', ObjGrasping)
-            self.grasping_poses = g_p(goal_obj)
+            grasping_poses_list = g_p(goal_obj)
+            self.grasping_poses = grasping_poses_list.grasp_poses
             print self.grasping_poses
         except rospy.ServiceException, e:
             print "Service call failed: %s" % e
+
+    def distance(self):
+        tf_listener = tf.TransformListener()
+        trans_l = []
+        trans_r = []
+        rot_l = []
+        rot_r = []
+        print self.grasping_poses
+        for n, pose in enumerate(self.grasping_poses):
+            try:
+
+                #(trans_l[n],rot_l[n]) = tf_listener.lookupTransform(self.grip_left, '/'+pose, rospy.Time(0))
+
+                #(trans_r[n], rot_r[n]) = tf_listener.lookupTransform(self.grip_right, '/'+pose, rospy.Time(0))
+                #
+                # (trans_l[n], rot_l[n]) = tf_listener.lookupTransform('/right_gripper_tool_frame', '/bowl_gp5', rospy.Time(0))
+                tf_listener.waitForTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0), rospy.Duration(1.0))
+                (trans_r, rot)=tf_listener.lookupTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0))
+
+            except (tf.ConnectivityException, tf.ExtrapolationException, tf.LookupException, tf.Exception):# ):
+                print '/' + pose
+                print 'No tf \n'
+                continue
+        print 'left: ', trans_r
+        print 'right ', trans_l
 
 
 
@@ -66,6 +98,8 @@ def main():
     while not rospy.is_shutdown():
 
         goal.object_selector()
+        goal.distance()
+
 
     rospy.spin()
 
@@ -74,3 +108,8 @@ if __name__ == '__main__':
         main()
     except rospy.ROSInterruptException:
         pass
+
+# right_gripper_base_link
+# right_gripper_tool_frame
+# left_gripper_base_link
+# left_gripper_tool_frame
