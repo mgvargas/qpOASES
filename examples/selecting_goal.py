@@ -28,7 +28,7 @@ class SelectGoal:
     def __init__(self):
         rospy.init_node('goal_selector', anonymous=True)
         r = rospy.Rate(2)
-        self.objects = rospy.Subscriber('/found_objects', Object, self.callback_obj)
+        self.objects = rospy.Subscriber('/detected_objects', Object, self.callback_obj)
         self.listener = tf.TransformListener(False, rospy.Duration(1))
         self.grasping_poses = []
         self.object_list = []
@@ -53,6 +53,7 @@ class SelectGoal:
                     self.goal_obj = obj
                     self.grasping_poses_service(self.goal_obj)
         self.old_list = self.object_list
+        return self.grasping_poses
 
     def grasping_poses_service(self, goal_obj):
         # Calling a service to obtain the name of the grasping poses of an object
@@ -76,20 +77,19 @@ class SelectGoal:
             try:
 
                 #(trans_l[n],rot_l[n]) = tf_listener.lookupTransform(self.grip_left, '/'+pose, rospy.Time(0))
-
                 #(trans_r[n], rot_r[n]) = tf_listener.lookupTransform(self.grip_right, '/'+pose, rospy.Time(0))
-                #
-                # (trans_l[n], rot_l[n]) = tf_listener.lookupTransform('/right_gripper_tool_frame', '/bowl_gp5', rospy.Time(0))
-                tf_listener.waitForTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0), rospy.Duration(1.0))
-                (trans_r, rot)=tf_listener.lookupTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0))
 
-            except (tf.ConnectivityException, tf.ExtrapolationException, tf.LookupException, tf.Exception):# ):
+                # (trans_l[n], rot_l[n]) = tf_listener.lookupTransform('/right_gripper_tool_frame', '/bowl_gp5', rospy.Time(0))
+
+                tf_listener.waitForTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0), rospy.Duration(1, 5e8))
+                (trans_r, rot)=tf_listener.lookupTransform("/right_gripper_tool_frame", "/base_link", rospy.Time.now())
+
+            except (tf.ConnectivityException, tf.ExtrapolationException, tf.LookupException, tf.Exception) as exc:
                 print '/' + pose
-                print 'No tf \n'
+                print 'No TF found\n',exc
                 continue
         print 'left: ', trans_r
         print 'right ', trans_l
-
 
 
 def main():
@@ -97,9 +97,23 @@ def main():
 
     while not rospy.is_shutdown():
 
-        goal.object_selector()
+        grasping_poses = goal.object_selector()
         goal.distance()
 
+        '''tf_listener = tf.TransformListener()
+        trans_r = []
+
+        for n, pose in enumerate(grasping_poses):
+            try:
+                tf_listener.waitForTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0),
+                                             rospy.Duration(1.0))
+                (trans_r, rot) = tf_listener.lookupTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0))
+
+            except (tf.ConnectivityException, tf.ExtrapolationException, tf.LookupException, tf.Exception):  # ):
+                print '/' + pose
+                print 'No tf \n'
+                continue
+        print 'left: ', trans_r'''
 
     rospy.spin()
 
