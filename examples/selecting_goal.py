@@ -17,7 +17,8 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import rospy
-import tf
+import tf2_ros
+import math
 import yaml
 from iai_markers_tracking.msg import Object
 from iai_markers_tracking.srv import ObjGrasping
@@ -29,15 +30,19 @@ class SelectGoal:
         rospy.init_node('goal_selector', anonymous=True)
         r = rospy.Rate(2)
         self.objects = rospy.Subscriber('/detected_objects', Object, self.callback_obj)
-        self.listener = tf.TransformListener(False, rospy.Duration(1))
+        self.tfBuffer = tf2_ros.Buffer()
+        self.listener = tf2_ros.TransformListener(self.tfBuffer)
         self.grasping_poses = []
         self.object_list = []
         self.old_list =[]
 
-        # Gripper frames:
-        self.grip_left = '/left_gripper_tool_frame'
-        self.grip_right = '/right_gripper_tool_frame'
+        # Arm selection
+        self.left_arm = False
+        self.right_arm = False
 
+        # Gripper frames:
+        self.grip_left = 'left_gripper_tool_frame'
+        self.grip_right = 'right_gripper_tool_frame'
 
     def callback_obj(self, data):
         obj = data.data
@@ -50,8 +55,8 @@ class SelectGoal:
         if self.old_list != self.object_list:
             for obj in self.object_list:
                 if obj == 'bowl':
-                    self.goal_obj = obj
-                    self.grasping_poses_service(self.goal_obj)
+                    goal_obj = obj
+                    self.grasping_poses_service(goal_obj)
         self.old_list = self.object_list
         return self.grasping_poses
 
@@ -66,54 +71,55 @@ class SelectGoal:
         except rospy.ServiceException, e:
             print "Service call failed: %s" % e
 
-    def distance(self):
-        tf_listener = tf.TransformListener()
-        trans_l = []
-        trans_r = []
-        rot_l = []
-        rot_r = []
-        print self.grasping_poses
+    def goal_by_distance(self):
+        # Find the grasping pose that is closer to one of the grippers
+        trans_l = [0]*len(self.grasping_poses)
+        trans_r = [0]*len(self.grasping_poses)
+        dist_l = [0]*len(self.grasping_poses)
+        dist_r = [0] * len(self.grasping_poses)
+        pose_found = False
+
         for n, pose in enumerate(self.grasping_poses):
             try:
+                trans_l[n] = self.tfBuffer.lookup_transform(self.grip_left, pose, rospy.Time(0), rospy.Duration(1, 5e8))
+                trans_r[n] = self.tfBuffer.lookup_transform(self.grip_right, pose, rospy.Time(0), rospy.Duration(1, 5e8))
+                pose_found = True
 
-                #(trans_l[n],rot_l[n]) = tf_listener.lookupTransform(self.grip_left, '/'+pose, rospy.Time(0))
-                #(trans_r[n], rot_r[n]) = tf_listener.lookupTransform(self.grip_right, '/'+pose, rospy.Time(0))
-
-                # (trans_l[n], rot_l[n]) = tf_listener.lookupTransform('/right_gripper_tool_frame', '/bowl_gp5', rospy.Time(0))
-
-                tf_listener.waitForTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0), rospy.Duration(1, 5e8))
-                (trans_r, rot)=tf_listener.lookupTransform("/right_gripper_tool_frame", "/base_link", rospy.Time.now())
-
-            except (tf.ConnectivityException, tf.ExtrapolationException, tf.LookupException, tf.Exception) as exc:
-                print '/' + pose
-                print 'No TF found\n',exc
+            except (tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException, tf2_ros.LookupException) as exc:
+                print '\nNo TF found\n',exc
                 continue
-        print 'left: ', trans_r
-        print 'right ', trans_l
+            else:
+                dist_l[n] = math.sqrt(
+                    trans_l[n].transform.translation.x ** 2 + trans_l[n].transform.translation.y ** 2
+                    + trans_l[n].transform.translation.z ** 2)
+                dist_r[n] = math.sqrt(
+                    trans_r[n].transform.translation.x ** 2 + trans_r[n].transform.translation.y ** 2
+                    + trans_r[n].transform.translation.z ** 2)
+
+        if pose_found:
+            min_dist_l = min(d for d in dist_l)
+            min_dist_r = min(d for d in dist_r)
+            if min_dist_l < min_dist_r:
+                elem = [i for i, d in enumerate(dist_l) if d == min_dist_l]
+                closest_pose = trans_l[elem[0]]
+                self.left_arm = True
+                self.right_arm = False
+            else:
+                elem = [i for i, d in enumerate(dist_r) if d == min_dist_r]
+                closest_pose = trans_r[elem[0]]
+                self.right_arm = True
+                self.left_arm = False
+            return closest_pose
 
 
 def main():
-    goal = SelectGoal()
+    c_goal = SelectGoal()
 
     while not rospy.is_shutdown():
 
-        grasping_poses = goal.object_selector()
-        goal.distance()
-
-        '''tf_listener = tf.TransformListener()
-        trans_r = []
-
-        for n, pose in enumerate(grasping_poses):
-            try:
-                tf_listener.waitForTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0),
-                                             rospy.Duration(1.0))
-                (trans_r, rot) = tf_listener.lookupTransform("/right_gripper_tool_frame", "/base_link", rospy.Time(0))
-
-            except (tf.ConnectivityException, tf.ExtrapolationException, tf.LookupException, tf.Exception):  # ):
-                print '/' + pose
-                print 'No tf \n'
-                continue
-        print 'left: ', trans_r'''
+        c_goal.object_selector()
+        closest_goal = c_goal.goal_by_distance()
+        print closest_goal
 
     rospy.spin()
 
@@ -122,8 +128,3 @@ if __name__ == '__main__':
         main()
     except rospy.ROSInterruptException:
         pass
-
-# right_gripper_base_link
-# right_gripper_tool_frame
-# left_gripper_base_link
-# left_gripper_tool_frame
