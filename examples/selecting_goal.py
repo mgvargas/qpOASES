@@ -78,11 +78,12 @@ class SelectGoal:
         self.set_joints()
 
     def set_joints(self, joint_name='left_arm'):
-        # getting current joint values
+        # getting current joint values of the arm
         items =[]
         a = 0
         for i,x in enumerate(self.joint_names):
             if joint_name in x:
+             if a < self.nJoints:
                 items.append(i)
                 self.jnt_pos[a] = self.joint_values[i]
                 a += 1
@@ -160,7 +161,7 @@ class SelectGoal:
                 self.left_arm = False
             return closest_pose
 
-    def kinem_chain(self, joints, name_frame_base='triangle_base_link', name_frame_end='right_gripper_tool_frame'):
+    def kinem_chain(self, name_frame_base='triangle_base_link', name_frame_end='right_gripper_tool_frame'):
         # Transform URDF to Chain() for the joints that have th given string
         self.chain = kdl.Chain()
 
@@ -198,46 +199,12 @@ class SelectGoal:
             rospy.logerr('Could not re-init the kinematic chain')
             self.name_frame_out = ''
 
-            '''for joint in self.urdf_model.joints:
-            if joints not in joint.name:
-                continue
-
-            if joint.origin is not None:
-                x = joint.origin.xyz[0]
-                y = joint.origin.xyz[1]
-                z = joint.origin.xyz[2]
-                r = joint.origin.rpy[0]
-                p = joint.origin.rpy[1]
-                ry = joint.origin.rpy[2]
-            else:
-                x = y = z = r = p = ry = 0.0
-
-            if joint.type == 'fixed':
-                continue
-
-            elif joint.type == 'prismatic':
-                if joint.axis[0] == 1:
-                    j_type = kdl.Joint.TransX
-                elif joint.axis[1] == 1:
-                    j_type = kdl.Joint.TransY
-                else:
-                    j_type = kdl.Joint.TransZ
-            else:
-                j_type = kdl.Joint.RotZ
-
-            print joint.name
-
-            self.chain.addSegment(
-                kdl.Segment(joint.child, kdl.Joint(joint.name, j_type),
-                            kdl.Frame(kdl.Rotation.RPY(r, p, ry), kdl.Vector(x, y, z))))
-            # print '\nChain: {} \n'.format(self.chain.getSegment(-1))
-            self.nJoints = self.chain.getNrOfJoints()'''
         return self.chain
 
     def arms_chain(self):
         self.get_urdf()
-        self.right_chain = self.kinem_chain('right_arm')
-        self.left_chain = self.kinem_chain('left_arm', name_frame_end='left_gripper_tool_frame')
+        self.right_chain = self.kinem_chain()
+        self.left_chain = self.kinem_chain(name_frame_end='left_gripper_tool_frame')
 
     def get_jacobian(self, d_chain='left_chain'):
         # Obtain jacobian for the selected arm
@@ -245,30 +212,43 @@ class SelectGoal:
             jacobian = kdl.Jacobian(self.left_chain.getNrOfJoints())
             jnt_pos = self.set_joints(joint_name='left_arm')
             self.jac_solver_left.JntToJac(jnt_pos, jacobian)
-            print '\n Left: \n', jacobian
-            print jnt_pos
+            #print '\n Left: \n', jacobian
 
         elif d_chain == 'right_chain':
             jacobian = kdl.Jacobian(self.right_chain.getNrOfJoints())
             jnt_pos = self.set_joints(joint_name='right_arm')
             self.jac_solver_right.JntToJac(jnt_pos, jacobian)
-            print '\n Right \n', jacobian
-            print jnt_pos
+            #print '\n Right \n', jacobian
+
         else:
             print 'Wrong chain specified for Jacobian'
             jacobian = kdl.Jacobian(self.chain.getNrOfJoints())
 
         return jacobian
 
-    def manipulability(self, jacobian):
+    @staticmethod
+    def manipulability(jacobian):
         col = jacobian.columns()
+        row = jacobian.rows()
         manipulability = 1
+
+        # Arrange the jacobian as array and obtain transpose
+        jac = np.zeros((row,col))
         for n in range(col):
             column = jacobian.getColumn(n)
-            for elem in column:
-                #if elem != 0:
-                    manipulability *= elem
-        return manipulability
+            for m, elem in enumerate(column):
+                jac[m,n] = elem
+                manipulability *= elem
+
+        jac_t = np.zeros((col, row))
+        for i in range(row):
+            for j in range(col):
+                jac_t[j, i] = jac[i, j]
+
+        # Manipulability = sqrt of determinant of jacobian*jacobian_transposed
+        manip = math.sqrt(np.linalg.det(np.dot(jac, jac_t)))
+
+        return manip
 
     def eef_pos(self):
         l = kdl.Frame()
@@ -279,8 +259,10 @@ class SelectGoal:
         self.fk_solver_l = kdl.ChainFkSolverPos_recursive(self.left_chain)
         jnt_pos = self.set_joints(joint_name='left_arm')
         self.fk_solver_l.JntToCart(jnt_pos, l)
-        #print '\n EEF_l: \n', l
-        #print '\n EEF_r: \n', r
+        #print '\n EEF_l: {} \n {} \n'.format(l.p, l.M)
+        print '\n EEF_r: {} \n {} \n'.format(r.p, r.M)
+
+
 
 def main():
     c_goal = SelectGoal()
@@ -297,9 +279,7 @@ def main():
 
         c_goal.eef_pos()
 
-
-
-        #print manip_l, manip_r
+        #print '\n man: {} {} \n'.format(manip_l, manip_r)
 
     rospy.spin()
 
