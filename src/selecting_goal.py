@@ -29,7 +29,7 @@ from iai_markers_tracking.msg import Object
 from iai_markers_tracking.srv import ObjGrasping
 from sensor_msgs.msg import JointState
 from urdf_parser_py.urdf import URDF
-from examples.kdl_parser import kdl_tree_from_urdf_model
+from kdl_parser import kdl_tree_from_urdf_model
 
 
 class SelectGoal:
@@ -46,6 +46,7 @@ class SelectGoal:
         self.joint_limits_lower = []
         self.joint_limits_upper = []
         self.joint_names = []
+        self.gp_weights = np.zeros(6)
 
         # Arm selection
         self.left_arm = False
@@ -87,21 +88,18 @@ class SelectGoal:
 
     def get_joints(self, joint_name='left_arm'):
         # Getting current joint values of the arms
-        items =[]
         a = b = 0
         for i,x in enumerate(self.all_joint_names):
             if joint_name in x:
-             if a < self.nJoints:
-                items.append(i)
-                self.left_jnt_pos[a] = self.joint_values[i]
-                a += 1
+                if a < self.nJoints:
+                    self.left_jnt_pos[a] = self.joint_values[i]
+                    a += 1
 
         for i,x in enumerate(self.all_joint_names):
             if 'right_arm' in x:
-             if a < self.nJoints:
-                items.append(i)
-                self.right_jnt_pos[b] = self.joint_values[i]
-                b += 1
+                if b < self.nJoints:
+                    self.right_jnt_pos[b] = self.joint_values[i]
+                    b += 1
 
     def get_urdf(self):
         rospack = rospkg.RosPack()
@@ -109,7 +107,6 @@ class SelectGoal:
         try:
             #self.urdf_model = urdf.Robot.from_xml_file(dir)
             self.urdf_model = URDF.from_parameter_server()
-
         except (OSError, LookupError) as error:
             rospy.logerr('URDF not found in parameter server')
             print 'ERROR: ', error
@@ -139,7 +136,8 @@ class SelectGoal:
 
     def init_gp_weights(self):
         # Initializes the weights of all grasping poses with 0
-        self.gp_weights = np.zeros(len(object))
+        if len(self.grasping_poses) > 0:
+            self.gp_weights = np.zeros(len(self.grasping_poses))
 
     def goal_by_distance(self):
         # Find the grasping pose that is closer to one of the grippers
@@ -182,17 +180,18 @@ class SelectGoal:
 
             if self.min_dist_l < self.min_dist_r:
                 elem = [i for i, d in enumerate(self.dist_l) if d == self.min_dist_l]
-                closest_pose = self.trans_l[elem[0]]
+                self.elem =elem[0]
+                closest_pose = self.trans_l[self.elem]
                 self.left_arm = True
                 self.right_arm = False
-                self.gp_weights[elem[0]] += 0.5
+                self.gp_weights[self.elem] += 0.4
             else:
                 elem = [i for i, d in enumerate(self.dist_r) if d == self.min_dist_r]
-                closest_pose = self.trans_r[elem[0]]
+                self.elem = elem[0]
+                closest_pose = self.trans_r[self.elem]
                 self.right_arm = True
                 self.left_arm = False
-                self.gp_weights[elem[0]] += 0.5
-            print 'weights: ',self.gp_weights
+                self.gp_weights[self.elem] += 0.4
             return closest_pose
         else:
             rospy.logerr('No TF found between gripper and object')
@@ -224,13 +223,14 @@ class SelectGoal:
             self.kdl_ikv_solver.setWeightJS(self.jweights.tolist())
 
             # Fill the list with the joint limits
+            self.joint_limits_lower = []
+            self.joint_limits_upper = []
             for jnt_name in self.joint_names:
                 jnt = self.urdf_model.joint_map[jnt_name]
                 if jnt.limit is not None:
                     self.joint_limits_lower.append(jnt.limit.lower)
                     self.joint_limits_upper.append(jnt.limit.upper)
             self.nJoints = self.chain.getNrOfJoints()
-
         except:
             print "Unexpected error:", sys.exc_info()[0]
             rospy.logerr('Could not re-init the kinematic chain')
@@ -241,7 +241,9 @@ class SelectGoal:
     def arms_chain(self):
         self.get_urdf()
         self.right_chain = self.kinem_chain(self.grip_right)
+        self.right_joint_limits = [self.joint_limits_lower, self.joint_limits_upper]
         self.left_chain = self.kinem_chain(self.grip_left)
+        self.left_joint_limits = [self.joint_limits_lower, self.joint_limits_upper]
 
     def get_jacobian(self, d_chain):
         # Obtain jacobian for the selected arm
@@ -279,34 +281,38 @@ class SelectGoal:
         if self.left_arm is True and manip_l > self.manip_threshold:
             self.frame_end = self.grip_left
             self.desired_chain = 'left_chain'
-            print '\n manip & dist \n'
+            self.gp_weights[self.elem] += 0.35
         elif self.right_arm is True and manip_r > self.manip_threshold:
             self.frame_end = self.grip_right
             self.desired_chain = 'right_chain'
-            print '\n manip & dist \n'
+            self.gp_weights[self.elem] += 0.35
         else:
             dist_rate = self.min_dist_l/self.min_dist_r
             if manip_l > manip_r and dist_rate <= self.distance_threshold:
                 elem = [i for i, d in enumerate(self.dist_l) if d == self.min_dist_l]
-                self.closest_pose = self.trans_l[elem[0]]
+                self.elem = elem[0]
+                self.closest_pose = self.trans_l[self.elem]
+                self.gp_weights[self.elem] += 0.5
                 self.frame_end = self.grip_left
                 self.desired_chain = 'left_chain'
                 self.left_arm = True
                 self.right_arm = False
-                print '\n manip \n'
             else:
-                elem = [i for i, d in enumerate(self.dist_l) if d == self.min_dist_l]
-                self.closest_pose = self.trans_l[elem[0]]
+                elem = [i for i, d in enumerate(self.dist_r) if d == self.min_dist_r]
+                self.elem = elem[0]
+                self.closest_pose = self.trans_r[self.elem]
+                self.gp_weights[self.elem] += 0.5
                 self.frame_end = self.grip_right
                 self.desired_chain = 'right_chain'
-                self.left_arm = True
-                self.right_arm = False
-                print '\n else \n'
+                self.left_arm = False
+                self.right_arm = True
 
+        print '\nweights: ', self.gp_weights
         self.kinem_chain(self.frame_end)
 
-        print 'The selected arm is {}, going to {}'.format(self.desired_chain, self.closest_pose.child_frame_id)
-        print '\n manip left: {} right: {} \n'.format(manip_l, manip_r)
+        print '\nThe selected arm is {}, going to {}\n'.format(self.desired_chain, self.closest_pose.child_frame_id)
+        #print '\n manip left: {} right: {} \n'.format(manip_l, manip_r)
+        return self.desired_chain
 
     @staticmethod
     def manipulability(jacobian):
@@ -328,7 +334,7 @@ class SelectGoal:
                 jac_t[j, i] = jac[i, j]
 
         # Manipulability = sqrt of determinant of jacobian*jacobian_transposed
-        # manip = math.sqrt(np.linalg.det(np.dot(jac, jac_t)))
+        manip = math.sqrt(np.linalg.det(np.dot(jac, jac_t)))
 
         return manip
 
@@ -351,7 +357,7 @@ class SelectGoal:
             dir = pack.get_path('qpoases') + '/config/controller_param.yaml'
             with open(dir, 'w') as outfile:
                 yaml.dump(data, outfile, default_flow_style=False)
-        except yaml.YAMLError:
+        except:# yaml.YAMLError:
             rospy.logerr("Unexpected error while writing YAML file:"), sys.exc_info()[0]
             return -1
 
@@ -367,22 +373,43 @@ class SelectGoal:
         #print '\n EEF_l: {} \n {} \n'.format(l.p, l.M)
         #print '\n EEF_r: {} \n {} \n'.format(r.p, r.M)
 
+    def dist_to_joint_limits(self, chain):
+        # Obtains the distance to joint limits
+        limit_warning = False
+        if chain == 'left_chain':
+            limit_diff_left = [0] * len(self.left_joint_limits[1])
+            for n, val in enumerate(self.left_joint_limits[1]):
+                limit_diff_left[n] = self.left_joint_limits[1][n] - abs(self.left_jnt_pos[n])
+                if limit_diff_left[n] < 0.1:
+                    limit_warning = True
+                    print 'left_arm_joint_{} is close to or outside joint limits'.format(n)
+            min_dist_to_limit_left = min(d for d in limit_diff_left)
+        else:
+            limit_diff_right = [0] * len(self.right_joint_limits[1])
+            for n, val in enumerate(self.right_joint_limits[1]):
+                limit_diff_right[n] = self.right_joint_limits[1][n] - abs(self.right_jnt_pos[n])
+                if limit_diff_right[n] < 0.1:
+                    limit_warning = True
+                    print 'right_arm_joint_{} is close to or outside joint limits'.format(n)
+            min_dist_to_limit_right = min(d for d in limit_diff_right)
+
 
 def main():
     c_goal = SelectGoal()
 
     while not rospy.is_shutdown():
         # Init weights
-        c_goal.init_goal_weights()
-
+        c_goal.init_gp_weights()
         # Gets the position of the end effectors
         c_goal.eef_pos()
         # Initial arm selection based on distance to closest grasping pose and manipulability
-        c_goal.arm_selector()
+        arm = c_goal.arm_selector()
 
         # Write YAML file with controller specifications
         c_goal.yaml_writer()
 
+        # Distance to joint limits
+        c_goal.dist_to_joint_limits(arm)
 
     rospy.spin()
 

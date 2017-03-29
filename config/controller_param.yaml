@@ -1,0 +1,28 @@
+controlled_joints:
+- right_arm_0_joint
+- right_arm_1_joint
+- right_arm_2_joint
+- right_arm_3_joint
+- right_arm_4_joint
+- right_arm_5_joint
+- right_arm_6_joint
+projection_mode: 'false'
+sim_frequency: 100
+simulated_joints:
+- triangle_base_joint
+- right_arm_0_joint
+- right_arm_1_joint
+- right_arm_2_joint
+- right_arm_3_joint
+- right_arm_4_joint
+- right_arm_5_joint
+- right_arm_6_joint
+start_config:
+  right_arm_0_joint: -0.53244
+  right_arm_1_joint: -1.9504
+  right_arm_2_joint: -0.00022
+  right_arm_3_joint: 1.85505
+  right_arm_4_joint: -0.7828
+  right_arm_5_joint: -0.1524
+  right_arm_6_joint: -1.8721
+watchdog_period: 0.1
