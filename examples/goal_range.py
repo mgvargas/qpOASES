@@ -35,10 +35,10 @@ def main():
 
     # Setup data of QP.
     # Weights.
-    w1 = 1e-3
-    w2 = 1e-3
-    w3 = 1e-2  # goal 1 weight
-    w4 = 10  # goal 2 weight
+    w1 = 1e-2
+    w2 = 1e-2
+    w3 = 1  # slack
+    w4 = 1e-3  # range goal weight
     # Joint limits.
     q0_max = 0.05
     q1_max = 0.15
@@ -47,12 +47,12 @@ def main():
     l2 = 0.2
     l3 = 0.3
     # Initial joint values.
-    q0 = 0.03
-    q1 = 0.12
+    q0 = -0.03
+    q1 = -0.12
     # Joint target.
-    q_des = 0.6
-    q_des_min = 0.57
-    q_des_max = 0.62
+    q_des = 0.7
+    q_des_min = 0.67
+    q_des_max = 0.72
     # Slack limits.
     e_max = 1000
     e_lim_max = 1000
@@ -130,7 +130,7 @@ def main():
 
     while not rospy.is_shutdown():
         # while (limit > precision or not ok) and i < 400:
-        while n < 40 and i < 400:
+        while n < 40 and i < 300:
             # Solve QP.
             i += 1
             nWSR = np.array([100])
@@ -161,13 +161,14 @@ def main():
             error = p * (q_des - q_eef)
             limit = abs(error)
 
-            print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n" % (
-                Opt[0], Opt[1], Opt[2], Opt[3], q_eef, error, q0, q1)
+            # print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n" % (
+            #    Opt[0], Opt[1], Opt[2], Opt[3], q_eef, error, q0, q1)
 
             # Depending on joint goals
             if q_des_min <= q_eef <= q_des_max:
                 ok = True
                 n += 1
+                print ok
             else:
                 ok = False
 
@@ -182,30 +183,31 @@ def main():
             r_min = np.hstack((r_min, q_des_min))
             t = np.hstack((t, i))
 
+        marker = dict(size=4,line=dict(width=1,))
         # Plot
         t_eef = go.Scatter(
-            y=pos_eef, x=t,
+            y=pos_eef, x=t, marker=dict(size=4,),
             mode='lines+markers', name='pos_eef')
         t_p0 = go.Scatter(
-            y=pos_0, x=t,
+            y=pos_0, x=t, marker=dict(size=4,),
             mode='lines+markers', name='pos_0')
         t_p1 = go.Scatter(
-            y=pos_1, x=t,
+            y=pos_1, x=t, marker=dict(size=4,),
             mode='lines+markers', name='pos_1')
         t_v0 = go.Scatter(
-            y=vel_0, x=t,
-            mode='lines+markers', name='vel0')
+            y=vel_0, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='vel_0')
         t_v1 = go.Scatter(
-            y=vel_1, x=t,
+            y=vel_1, x=t, marker=dict(size=4,),
             mode='lines+markers', name='vel_1')
         t_er = go.Scatter(
-            y=p_error, x=t,
+            y=p_error, x=t, marker=dict(size=4,),
             mode='lines+markers', name='error')
         t_min = go.Scatter(
-            y=r_min, x=t,
+            y=r_min, x=t, marker=dict(size=4,),
             mode='lines', name='min')
         t_max = go.Scatter(
-            y=r_max, x=t,
+            y=r_max, x=t, marker=dict(size=4,),
             mode='lines', name='max')
 
         data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_min, t_max]

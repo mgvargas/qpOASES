@@ -36,8 +36,8 @@ def main():
     # Weights.
     w1 = 1e-3
     w2 = 1e-3
-    w3 = .10  # goal 1 weight
-    w4 = .1  # goal 2 weight
+    w3 = .1  # goal 1 weight
+    w4 = .001  # goal 2 weight
     # Joint limits.
     q0_max = 0.05
     q1_max = 0.15
@@ -186,28 +186,28 @@ def main():
 
             # Plot
             t_eef = go.Scatter(
-                y=pos_eef, x=t,
+                y=pos_eef, x=t, marker=dict(size=4,),
                 mode='lines+markers', name='pos_eef')
             t_p0 = go.Scatter(
-                y=pos_0, x=t,
+                y=pos_0, x=t, marker=dict(size=4,),
                 mode='lines+markers', name='pos_0')
             t_p1 = go.Scatter(
-                y=pos_1, x=t,
+                y=pos_1, x=t, marker=dict(size=4,),
                 mode='lines+markers', name='pos_1')
             t_v0 = go.Scatter(
-                y=vel_0, x=t,
+                y=vel_0, x=t, marker=dict(size=4,),
                 mode='lines+markers', name='vel_0')
             t_v1 = go.Scatter(
-                y=vel_1, x=t,
+                y=vel_1, x=t, marker=dict(size=4,),
                 mode='lines+markers', name='vel_1')
             t_er = go.Scatter(
-                y=p_error, x=t,
+                y=p_error, x=t, marker=dict(size=4,),
                 mode='lines+markers', name='error')
             t_g1 = go.Scatter(
-                y=r_min, x=t,
+                y=r_min, x=t, marker=dict(size=4,),
                 mode='lines', name='goal_1')
             t_g2 = go.Scatter(
-                y=r_max, x=t,
+                y=r_max, x=t, marker=dict(size=4,),
                 mode='lines', name='goal_2')
 
             data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g2]

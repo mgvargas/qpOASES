@@ -23,12 +23,13 @@ from qpoases import PySQProblem as SQProblem
 from qpoases import PyOptions as Options
 from qpoases import PyPrintLevel as PrintLevel
 from sensor_msgs.msg import JointState
+import plotly
+import plotly.graph_objs as go
 
 
 def main():
     rospy.init_node('controller_2dof', anonymous=True)
     rospy.Rate(10)
-    joint_pub = rospy.Publisher('joint_state', JointState, queue_size=100)
     rospy.sleep(0.2)
 
     # Setup data of QP.
@@ -38,20 +39,18 @@ def main():
     w3 = 1
     w4 = 1  # joint goal
     # Joint limits.
-    q0_min = -0.05  
-    q0_max = 0.05  
-    q1_min = -0.15
+    q0_max = 0.05
     q1_max = 0.15  
     # Links
     l1 = 0.1  
     l2 = 0.2  
     l3 = 0.3  
     # Initial joint values.
-    q0 = 0.02
+    q0 = -0.02
     q1 = -0.15
     # Joint target.
-    q_des = 0.75
-    q0_des = 0.02
+    q_des = 0.6
+    q0_des = 0.03
     q1_des = 0.05
     q0_goal = True
     q1_goal = False
@@ -65,10 +64,10 @@ def main():
     a0_max = 0.05 * 0.5
     a1_max = 0.1 * 0.5
     # Others
-    precision = 1e-3
+    precision = 5e-3
     joint_precision = 5e-3
-    p = 1
-    pj = 1
+    p = 10
+    pj = 5
     q_eef = l1 + l2 + l3 + q0 + q1
     error = p * (q_des - q_eef)
     vel_init = 0
@@ -85,23 +84,24 @@ def main():
                   0.0, 0.0, w3, 0.0,
                   0.0, 0.0, 0.0, w4]).reshape((4, 4))
 
-    A = np.array([ 1.0, 1.0, 1.0, 0.0,
-                   1.0, 0.0, 0.0, 0.0,
-                   0.0, 1.0, 0.0, 0.0,
-                   1.0, 0.0, 0.0, 0.0,
-                   0.0, 1.0, 0.0, 0.0,
-                   0.0, 0.0, 0.0, 0.0,
-                   0.0, 0.0, 0.0, 0.0]).reshape((7, 4))
+    A = np.array([1.0, 1.0, 1.0, 0.0,
+                  1.0, 0.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0, 0.0,
+                  1.0, 0.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 0.0]).reshape((7, 4))
 
     g = np.array([0.0, 0.0, 0.0, 0.0])
     lb = np.array([-v0_max, -v1_max, -e_max, -e0_max])
     ub = np.array([v0_max, v1_max, e_max, e0_max])
-    lbA = np.array([error, (q0_min - q0), (q1_min - q0), -a0_max, -a1_max, 0, 0])
+    lbA = np.array([error, (-q0_max - q0), (-q1_max - q0), -a0_max, -a1_max, 0, 0])
     ubA = np.array([error, (q0_max - q0), (q1_max - q0), a0_max, a1_max, 0, 0])
 
     # Setting up QProblem object.
     if q0_goal is False and q1_goal is False:
         print("\nNo joint goal specified\n")
+        return -1
     elif (q0_goal is True and q1_goal is False) or (q0_goal is False and q1_goal is True):
         if q0_goal is True:
             lbA[5] = (q0_des-q0)
@@ -131,29 +131,26 @@ def main():
     options.printLevel = PrintLevel.LOW
     example.setOptions(options)
 
-    print("Init pos = %g,  goal = %g, error = %g, q0 =%g, q1 = %g\n" %
+    print("Init pos = %g, goal = %g, error = %g, q0 =%g, q1 = %g\n" %
           (q_eef, q_des, error, q0, q1))
     print A
 
     i = 0
     limit = abs(error)
-    first = True
     ok = False
     Opt = np.zeros(4)
 
-    # ROS Message definition
-    vel_pos = JointState()
-    vel_pos.header.frame_id = "q0"  
-    vel_pos.position.append(q0)
-    vel_pos.position.append(q1)
-    vel_pos.position.append(q_eef)
-    vel_pos.velocity.append(vel_init)
-    vel_pos.effort.append(error)
-    vel_pos.effort.append(0)
-    vel_pos.effort.append(lbA[4])
-    vel_pos.effort.append(ubA[4])
-    vel_pos.header.stamp = rospy.Time.now()
-    rospy.sleep(0.2)
+    # Plotting
+    t = np.array(i)
+    pos_eef = np.array(q_eef)
+    pos_0 = np.array(q0)
+    pos_1 = np.array(q1)
+    vel_0 = np.array(vel_init)
+    vel_1 = np.array(vel_init)
+    p_error = np.array(error)
+    eef_goal = np.array(q_des)
+    q0_set = np.array(q0_des)
+    q1_set = np.array(q1_des)
 
     return_value = example.init(H, g, A, lb, ub, lbA, ubA, nWSR)
 
@@ -162,84 +159,118 @@ def main():
         return -1
 
     while not rospy.is_shutdown():
-            while (limit > precision or not ok) and i < 2000:
-                if first is True:
-                    joint_pub.publish(vel_pos)
+        while (limit > precision or not ok) and i < 2000:
+            # Solve QP.
+            i += 1
+            nWSR = np.array([100])
+            lbA[0] = error
+            lbA[1] = -q0_max - q0
+            lbA[2] = -q1_max - q1
+            lbA[3] = a0_const * Opt[0] - a0_max
+            lbA[4] = a1_const * Opt[1] - a1_max
+            ubA[0] = error
+            ubA[1] = q0_max - q0
+            ubA[2] = q1_max - q1
+            ubA[3] = a0_const * Opt[0] + a0_max
+            ubA[4] = a1_const * Opt[1] + a1_max
+
+            return_value = example.hotstart(H, g, A, lb, ub, lbA, ubA, nWSR)
+
+            if return_value != returnValue.SUCCESSFUL_RETURN:
+                rospy.logerr("Hotstart of QP-Problem returned without success!")
+                return -1
+
+            # Get and  print solution of QP.
+            example.getPrimalSolution(Opt)
+            q0 += Opt[0] /100
+            q1 += Opt[1] /100
+            q_eef = l1 + l2 + l3 + q0 + q1
+            error = p * (q_des - q_eef)
+            limit = abs(error)
+
+            # print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n" % (
+            # Opt[0], Opt[1], Opt[2], Opt[3], q_eef, error, q0, q1)
+
+            # Depending on joint goals
+            if q0_goal is False and q1_goal is False:
+                ok = True
+                error = 0
+                limit = 0
+            elif q0_goal is True and q1_goal is False:
+                lbA[5] = pj * (q0_des - q0)
+                ubA[5] = pj * (q0_des - q0)
+                if abs(lbA[5]) < joint_precision:
+                    ok = True
+                    # print "\n q0_error = %g, i = %g \n" % (lbA[5], i)
                 else:
-                    # Solve QP.
-                    i += 1
-                    nWSR = np.array([100])
-                    lbA[0] = error
-                    lbA[1] = q0_min - q0
-                    lbA[2] = q1_min - q1
-                    lbA[3] = a0_const * Opt[0] - a0_max
-                    lbA[4] = a1_const * Opt[1] - a1_max
-                    ubA[0] = error
-                    ubA[1] = q0_max - q0
-                    ubA[2] = q1_max - q1
-                    ubA[3] = a0_const * Opt[0] + a0_max
-                    ubA[4] = a1_const * Opt[1] + a1_max
+                    ok = False
+            elif q0_goal is False and q1_goal is True:
+                lbA[5] = pj * (q1_des - q1)
+                ubA[5] = pj * (q1_des - q1)
+                if abs(lbA[5]) < joint_precision:
+                    ok = True
+                    # print "\n q0_error = %g, i = %g \n" % (lbA[5], i)
+            else:
+                lbA[5] = pj * (q0_des - q0)
+                ubA[5] = pj * (q0_des - q0)
+                lbA[6] = pj * (q1_des - q1)
+                ubA[6] = pj * (q1_des - q1)
+                if abs(lbA[5]) < joint_precision and abs(lbA[6]) < joint_precision:
+                    ok = True
+                    # print "\n q0_error = %g, q1_error = %g \n" % (lbA[5], lbA[6])
 
-                    return_value = example.hotstart(H, g, A, lb, ub, lbA, ubA, nWSR)
+            # Plotting arrays
+            pos_eef = np.hstack((pos_eef, q_eef))
+            pos_0 = np.hstack((pos_0, q0))
+            pos_1 = np.hstack((pos_1, q1))
+            vel_0 = np.hstack((vel_0, Opt[0]))
+            vel_1 = np.hstack((vel_1, Opt[1]))
+            p_error = np.hstack((p_error, error))
+            eef_goal = np.hstack((eef_goal, q_des))
+            q0_set = np.hstack((q0_set, q0_des))
+            q1_set = np.hstack((q1_set, q1_des))
+            t = np.hstack((t, i))
 
-                    if return_value != returnValue.SUCCESSFUL_RETURN:
-                        print "Hotstart of QP-Problem returned without success! ERROR MESSAGE: "
-                        return -1
+        # Plot
+        t_eef = go.Scatter(
+            y=pos_eef, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='pos_eef')
+        t_p0 = go.Scatter(
+            y=pos_0, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='pos_0')
+        t_p1 = go.Scatter(
+            y=pos_1, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='pos_1')
+        t_v0 = go.Scatter(
+            y=vel_0, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='vel_0')
+        t_v1 = go.Scatter(
+            y=vel_1, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='vel_1')
+        t_er = go.Scatter(
+            y=p_error, x=t, marker=dict(size=4,),
+            mode='lines+markers', name='error')
+        t_g1 = go.Scatter(
+            y=q0_set, x=t, marker=dict(size=4,),
+            mode='lines', name='joint0_goal')
+        t_g2 = go.Scatter(
+            y=q1_set, x=t, marker=dict(size=4,),
+            mode='lines', name='joint1_goal')
+        t_g3 = go.Scatter(
+            y=eef_goal, x=t, marker=dict(size=4,),
+            mode='lines', name='eef_goal')
 
-                    # Get and  print solution of QP.
-                    example.getPrimalSolution(Opt)
-                    q0 += Opt[0] /100
-                    q1 += Opt[1] /100
-                    q_eef = l1 + l2 + l3 + q0 + q1
-                    error = p * (q_des - q_eef)
-                    limit = abs(error)
+        if q0_goal == True:
+            data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g3]
+        else:
+            data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g2, t_g3]
+        plotly.offline.plot(data, filename='joint_goals.html')
 
-                    print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n" % (
-                    Opt[0], Opt[1], Opt[2], Opt[3], q_eef, error, q0, q1)
+        print "\n i = ", i
+        return 0
 
-                    # Depending on joint goals
-                    if q0_goal is False and q1_goal is False:
-                        ok = True
-                        error = 0
-                        limit = 0
-                    elif q0_goal is True and q1_goal is False:
-                        lbA[5] = pj * (q0_des - q0)
-                        ubA[5] = pj * (q0_des - q0)
-                        if abs(lbA[5]) < joint_precision:
-                            ok = True
-                            print "\n q0_error = %g, i = %g \n" % (lbA[5], i)
-                        else:
-                            ok = False
-                    elif q0_goal is False and q1_goal is True:
-                        lbA[5] = pj * (q1_des - q1)
-                        ubA[5] = pj * (q1_des - q1)
-                        if abs(lbA[5]) < joint_precision:
-                            ok = True
-                            print "\n q0_error = %g, i = %g \n" % (lbA[5], i)
-                    else:
-                        lbA[5] = pj * (q0_des - q0)
-                        ubA[5] = pj * (q0_des - q0)
-                        lbA[6] = pj * (q1_des - q1)
-                        ubA[6] = pj * (q1_des - q1)
-                        if abs(lbA[5]) < joint_precision and abs(lbA[6]) < joint_precision:
-                            ok = True
-                            print "\n q0_error = %g, q1_error = %g \n" % (lbA[5], lbA[6])
+    print ok
 
-                    vel_pos.position[0] = q0
-                    vel_pos.position[1] = q1
-                    vel_pos.position[2] = q_eef
-                    vel_pos.velocity[0] = Opt[0]
-                    vel_pos.effort[0] = error
-                    vel_pos.effort[1] = Opt[1]
-                    vel_pos.effort[2] = lbA[4]
-                    vel_pos.effort[3] = ubA[4]
-                    vel_pos.header.stamp += rospy.Duration(0.01)
-
-                    joint_pub.publish(vel_pos)
-
-                first = False
-            print ok
-            return 0
 
 
 if __name__ == '__main__':
@@ -247,5 +278,3 @@ if __name__ == '__main__':
         main()
     except rospy.ROSInterruptException:
         pass
-
-# PLOT: rqt_plot /joint_state/position[0] /joint_state/velocity[0] /joint_state/effort[0] /joint_state/effort[1]
