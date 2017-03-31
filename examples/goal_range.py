@@ -37,8 +37,8 @@ def main():
     # Weights.
     w1 = 1e-2
     w2 = 1e-2
-    w3 = 1  # slack
-    w4 = 1e-3  # range goal weight
+    w3 = 1  # slack (attractor)
+    w4 = 1e-3  # slack (range goal)
     # Joint limits.
     q0_max = 0.05
     q1_max = 0.15
@@ -55,7 +55,7 @@ def main():
     q_des_max = 0.72
     # Slack limits.
     e_max = 1000
-    e_lim_max = 1000
+    e_range_max = 1000
     # Velocity limits.(+-)
     v0_max = 0.05
     v1_max = 0.1
@@ -90,8 +90,8 @@ def main():
                   0.0, 0.0, 0.0, 1.0]).reshape((6, 4))
 
     g = np.array([0.0, 0.0, 0.0, 0.0])
-    lb = np.array([-v0_max, -v1_max, -e_max, -e_lim_max])
-    ub = np.array([v0_max, v1_max, e_max, e_lim_max])
+    lb = np.array([-v0_max, -v1_max, -e_max, -e_range_max])
+    ub = np.array([v0_max, v1_max, e_max, e_range_max])
     lbA = np.array([error, (-q0_max - q0), (-q1_max - q0), -a0_max, -a1_max, (q_des_min - q_eef)])
     ubA = np.array([error, (q0_max - q0), (q1_max - q0), a0_max, a1_max, (q_des_max - q_eef)])
 
