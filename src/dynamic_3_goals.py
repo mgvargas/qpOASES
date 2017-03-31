@@ -29,7 +29,6 @@ import plotly.graph_objs as go
 
 # The range of the EEF is: 0.6+-0.2
 
-
 def main():
     rospy.init_node('controller_2dof', anonymous=True)
     rospy.Rate(10)
@@ -47,13 +46,15 @@ def main():
     l3 = 0.3
     # Initial joint values.
     q0_init = q0 = 0.05
-    q1_init = q1 = 0.05
+    q1_init = q1 = 0.10
     # Joint target.
-    q_des1 = 0.45
-    q_des2 = 0.78
+    q_des1 = 0.4
+    q_des2 = 0.8
+    q_des3 = 0.7
     # Slack limits.
     e1_max = 1000
     e2_max = 1000
+    e3_max = 1000
     # Velocity limits.(+-)
     v0_max = 0.05
     v1_max = 0.1
@@ -66,55 +67,63 @@ def main():
     q_eef_init = q_eef = l1 + l2 + l3 + q0 + q1
     error1 = p * (q_des1 - q_eef)
     error2 = p * (q_des2 - q_eef)
+    error3 = p * (q_des3 - q_eef)
     vel_init = 0
     nWSR = np.array([100])
     # Dynamic goal weights
-    w3 = (error2/(error1+error2))**2  # goal 1 weight
-    w4 = (error1/(error1+error2))**2  # goal 2 weight
+    sum_error = abs(error1) + abs(error2) + abs(error3)
+    w3 = ((sum_error - abs(error1)) / sum_error) ** 2  # goal 1 weight
+    w4 = ((sum_error - abs(error2)) / sum_error) ** 2  # goal 2 weight
+    w5 = ((sum_error - abs(error3)) / sum_error) ** 2  # goal 3 weight
+
 
     # Acceleration
     a0_const = (v0_max - a0_max) / v0_max
     a1_const = (v1_max - a1_max) / v1_max
 
-    example = SQProblem(4, 6)
+    example = SQProblem(5, 7)
 
-    H = np.array([w1, 0.0, 0.0, 0.0,
-                  0.0, w2, 0.0, 0.0,
-                  0.0, 0.0, w3, 0.0,
-                  0.0, 0.0, 0.0, w4]).reshape((4, 4))
+    H = np.array([w1, 0.0, 0.0, 0.0, 0.0,
+                  0.0, w2, 0.0, 0.0, 0.0,
+                  0.0, 0.0, w3, 0.0, 0.0,
+                  0.0, 0.0, 0.0, w4, 0.0,
+                  0.0, 0.0, 0.0, 0.0, w5]).reshape((5, 5))
 
-    A = np.array([1.0, 1.0, 1.0, 0.0,
-                  1.0, 1.0, 0.0, 1.0,
-                  1.0, 0.0, 0.0, 0.0,
-                  0.0, 1.0, 0.0, 0.0,
-                  1.0, 0.0, 0.0, 0.0,
-                  0.0, 1.0, 0.0, 0.0]).reshape((6, 4))
+    A = np.array([1.0, 1.0, 1.0, 0.0, 0.0,
+                  1.0, 1.0, 0.0, 1.0, 0.0,
+                  1.0, 1.0, 0.0, 0.0, 1.0,
+                  1.0, 0.0, 0.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0, 0.0, 0.0,
+                  1.0, 0.0, 0.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0, 0.0, 0.0]).reshape((7, 5))
 
-    g = np.array([0.0, 0.0, 0.0, 0.0])
-    lb = np.array([-v0_max, -v1_max, -e1_max, -e2_max])
-    ub = np.array([v0_max, v1_max, e1_max, e2_max])
-    lbA = np.array([error1, error2, (-q0_max - q0), (-q1_max - q0), -a0_max, -a1_max])
-    ubA = np.array([error1, error2, (q0_max - q0), (q1_max - q0), a0_max, a1_max])
+    g = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+    lb = np.array([-v0_max, -v1_max, -e1_max, -e2_max, -e3_max])
+    ub = np.array([v0_max, v1_max, e1_max, e2_max, e3_max])
+    lbA = np.array([error1, error2, error3, (-q0_max - q0), (-q1_max - q0), -a0_max, -a1_max])
+    ubA = np.array([error1, error2, error3, (q0_max - q0), (q1_max - q0), a0_max, a1_max])
 
     # Setting up QProblem object
     options = Options()
     options.setToReliable()
     options.printLevel = PrintLevel.LOW
     example.setOptions(options)
-    Opt = np.zeros(4)
+    Opt = np.zeros(5)
 
     print("Init pos = %g,  goal_1 = %g, goal_2 = %g, error_1 = %g, error_2 = %g, q0 =%g, q1 = %g\n" %
           (q_eef, q_des1, q_des2, error1, error2, q0, q1))
-    print A
+    print 'A = {}\n'.format(A)
 
     i = 0
     # Stopping conditions
     limit1 = abs(error1)
     limit2 = abs(error2)
-    lim = min([limit1, limit2])
+    limit3 = abs(error3)
+    lim = min([limit1, limit2, limit3])
     diff1 = abs(error1)
     diff2 = abs(error2)
-    diff = min([diff1, diff2])
+    diff3 = abs(error3)
+    diff = min([diff1, diff2, diff3])
 
     # Plotting
     t = np.array(i)
@@ -124,8 +133,9 @@ def main():
     vel_0 = np.array(vel_init)
     vel_1 = np.array(vel_init)
     p_error = np.array(error1)
-    r_max = np.array(q_des1)
-    r_min = np.array(q_des2)
+    go_1 = np.array(q_des1)
+    go_2 = np.array(q_des2)
+    go_3 = np.array(q_des3)
 
     return_value = example.init(H, g, A, lb, ub, lbA, ubA, nWSR)
 
@@ -134,24 +144,25 @@ def main():
         return -1
 
     while not rospy.is_shutdown():
-        #while (diff1 > 0.00005 or diff2 > 0.0005) and limit1 > precision and limit2 > precision and i < 400:
-        while diff > 0.00005 and lim > precision and i < 400:
+        while (diff > 0.00005) and lim > precision and i < 400:
 
             # Solve QP.
             i += 1
             nWSR = np.array([100])
             lbA[0] = error1
             lbA[1] = error2
-            lbA[2] = -q0_max - q0
-            lbA[3] = -q1_max - q1
-            lbA[4] = a0_const * Opt[0] - a0_max
-            lbA[5] = a1_const * Opt[1] - a1_max
+            lbA[2] = error3
+            lbA[3] = -q0_max - q0
+            lbA[4] = -q1_max - q1
+            lbA[5] = a0_const * Opt[0] - a0_max
+            lbA[6] = a1_const * Opt[1] - a1_max
             ubA[0] = error1
             ubA[1] = error2
-            ubA[2] = q0_max - q0
-            ubA[3] = q1_max - q1
-            ubA[4] = a0_const * Opt[0] + a0_max
-            ubA[5] = a1_const * Opt[1] + a1_max
+            ubA[2] = error3
+            ubA[3] = q0_max - q0
+            ubA[4] = q1_max - q1
+            ubA[5] = a0_const * Opt[0] + a0_max
+            ubA[6] = a1_const * Opt[1] + a1_max
 
             return_value = example.hotstart(H, g, A, lb, ub, lbA, ubA, nWSR)
 
@@ -161,32 +172,43 @@ def main():
 
             old_error1 = error1
             old_error2 = error2
-            # Update limits
+            old_error3 = error3
+
             example.getPrimalSolution(Opt)
+
+            # Update limits
             q0 += Opt[0] / 100
             q1 += Opt[1] / 100
             q_eef = l1 + l2 + l3 + q0 + q1
             error1 = p * (q_des1 - q_eef)
             error2 = p * (q_des2 - q_eef)
+            error3 = p * (q_des3 - q_eef)
             # Update weights
-            w3 = (error2 / (error1 + error2)) ** 2
-            w4 = (error1 / (error1 + error2)) ** 2
+            sum_error = abs(error1) + abs(error2) + abs(error3)
+            w3 = ((sum_error - abs(error1)) / sum_error) ** 2  # goal 1 weight
+            w4 = ((sum_error - abs(error2)) / sum_error) ** 2  # goal 2 weight
+            w5 = ((sum_error - abs(error3)) / sum_error) ** 2  # goal 3 weight
 
-            H = np.array([w1, 0.0, 0.0, 0.0,
-                          0.0, w2, 0.0, 0.0,
-                          0.0, 0.0, w3, 0.0,
-                          0.0, 0.0, 0.0, w4]).reshape((4, 4))
+            H = np.array([w1, 0.0, 0.0, 0.0, 0.0,
+                          0.0, w2, 0.0, 0.0, 0.0,
+                          0.0, 0.0, w3, 0.0, 0.0,
+                          0.0, 0.0, 0.0, w4, 0.0,
+                          0.0, 0.0, 0.0, 0.0, w5]).reshape((5, 5))
 
             # Stopping conditions
             limit1 = abs(error1)
             limit2 = abs(error2)
-            lim = min([limit1, limit2])
+            limit3 = abs(error3)
+            lim = min([limit1, limit2, limit3])
             diff1 = abs(error1-old_error1)
             diff2 = abs(error2-old_error2)
-            diff = min([diff1, diff2])
+            diff3 = abs(error3-old_error3)
+            diff = min([diff1, diff2, diff3])
 
-            print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, w3= %g, w4= %g, q0= %g q1= %g \n" % (
-            Opt[0], Opt[1], Opt[2], Opt[3], q_eef, w3, w4, q0, q1)
+            #print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, w3= %g, w4= %g, q0= %g q1= %g \n" % (
+            #Opt[0], Opt[1], Opt[2], Opt[3], q_eef, w3, w4, q0, q1)
+            print 'weights= [ %g, %g, %g ]'%(w3, w4, w5)
+            print 'vel = [ %g, %g ], error = [ %g, %g, %g ] \n'% (Opt[0], Opt[1], error1, error2, error3)
 
             # Plotting arrays
             pos_eef = np.hstack((pos_eef, q_eef))
@@ -195,8 +217,9 @@ def main():
             vel_0 = np.hstack((vel_0, Opt[0]))
             vel_1 = np.hstack((vel_1, Opt[1]))
             p_error = np.hstack((p_error, error1))
-            r_max = np.hstack((r_max, q_des1))
-            r_min = np.hstack((r_min, q_des2))
+            go_1 = np.hstack((go_1, q_des1))
+            go_2 = np.hstack((go_2, q_des2))
+            go_3 = np.hstack((go_3, q_des3))
             t = np.hstack((t, i))
 
         # Plot
@@ -219,21 +242,24 @@ def main():
             y=p_error, x=t, marker=dict(size=4,),
             mode='lines+markers', name='error')
         t_g1 = go.Scatter(
-            y=r_min, x=t, marker=dict(size=4,),
+            y=go_1, x=t, marker=dict(size=4,),
             mode='lines', name='goal_1')
         t_g2 = go.Scatter(
-            y=r_max, x=t, marker=dict(size=4,),
+            y=go_2, x=t, marker=dict(size=4,),
             mode='lines', name='goal_2')
+        t_g3 = go.Scatter(
+            y=go_3, x=t, marker=dict(size=4, ),
+            mode='lines', name='goal_3')
 
-        data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g2]
-        layout = dict(title="Initial position eef = %g, q0 =%g, q1 = %g.  Goals: goal_1 = %g, goal_2 = %g\n" %
-                      (q_eef_init, q0_init, q1_init, q_des1, q_des2),
+        data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g2, t_g3]
+        layout = dict(title="Initial position eef = %g, q0 =%g, q1 = %g.  Goals: goal_1 = %g, goal_2 = %g, goal_3 = %g\n" %
+                      (q_eef_init, q0_init, q1_init, q_des1, q_des2, q_des3),
                       xaxis=dict(title='Iterations'),
                       yaxis=dict(title='Position / Velocity'),
                       )
         fig = dict(data=data, layout=layout)
 
-        plotly.offline.plot(fig, filename='dynamic_weights.html')
+        plotly.offline.plot(fig, filename='dynamic_weights_3.html')
 
         print "\n i = %g \n" % i
         return 0
