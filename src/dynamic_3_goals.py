@@ -45,12 +45,12 @@ def main():
     l2 = 0.2
     l3 = 0.3
     # Initial joint values.
-    q0_init = q0 = 0.05
-    q1_init = q1 = 0.10
+    q0_init = q0 = 0.04
+    q1_init = q1 = 0.08
     # Joint target.
     q_des1 = 0.4
-    q_des2 = 0.8
-    q_des3 = 0.7
+    q_des2 = 0.7
+    q_des3 = 0.8
     # Slack limits.
     e1_max = 1000
     e2_max = 1000
@@ -72,9 +72,14 @@ def main():
     nWSR = np.array([100])
     # Dynamic goal weights
     sum_error = abs(error1) + abs(error2) + abs(error3)
-    w3 = ((sum_error - abs(error1)) / sum_error) ** 2  # goal 1 weight
-    w4 = ((sum_error - abs(error2)) / sum_error) ** 2  # goal 2 weight
-    w5 = ((sum_error - abs(error3)) / sum_error) ** 2  # goal 3 weight
+    '''w3 = ((sum_error - abs(error1)) / sum_error) ** 3  # goal 1 weight
+    w4 = ((sum_error - abs(error2)) / sum_error) ** 3  # goal 2 weight
+    w5 = ((sum_error - abs(error3)) / sum_error) ** 3  # goal 3 weight'''
+    min_error = min(abs(error1), abs(error2), abs(error3))
+    max_error = max(abs(error1), abs(error2), abs(error3))
+    w3 = (1 - (abs(error1) - min_error) / (max_error-min_error)) ** 3  # goal 1 weight
+    w4 = (1 - (abs(error2) - min_error) / (max_error-min_error)) ** 3  # goal 2 weight
+    w5 = (1 - (abs(error3) - min_error) / (max_error-min_error)) ** 3  # goal 3 weight
 
 
     # Acceleration
@@ -184,10 +189,11 @@ def main():
             error2 = p * (q_des2 - q_eef)
             error3 = p * (q_des3 - q_eef)
             # Update weights
-            sum_error = abs(error1) + abs(error2) + abs(error3)
-            w3 = ((sum_error - abs(error1)) / sum_error) ** 2  # goal 1 weight
-            w4 = ((sum_error - abs(error2)) / sum_error) ** 2  # goal 2 weight
-            w5 = ((sum_error - abs(error3)) / sum_error) ** 2  # goal 3 weight
+            min_error = min(abs(error1), abs(error2), abs(error3))
+            max_error = max(abs(error1), abs(error2), abs(error3))
+            w3 = (1 - (abs(error1) - min_error) / (max_error - min_error)) ** 3  # goal 1 weight
+            w4 = (1 - (abs(error2) - min_error) / (max_error - min_error)) ** 3  # goal 2 weight
+            w5 = (1 - (abs(error3) - min_error) / (max_error - min_error)) ** 3  # goal 3 weight
 
             H = np.array([w1, 0.0, 0.0, 0.0, 0.0,
                           0.0, w2, 0.0, 0.0, 0.0,
@@ -205,8 +211,6 @@ def main():
             diff3 = abs(error3-old_error3)
             diff = min([diff1, diff2, diff3])
 
-            #print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, w3= %g, w4= %g, q0= %g q1= %g \n" % (
-            #Opt[0], Opt[1], Opt[2], Opt[3], q_eef, w3, w4, q0, q1)
             print 'weights= [ %g, %g, %g ]'%(w3, w4, w5)
             print 'vel = [ %g, %g ], error = [ %g, %g, %g ] \n'% (Opt[0], Opt[1], error1, error2, error3)
 

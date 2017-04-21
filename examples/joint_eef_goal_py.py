@@ -46,11 +46,11 @@ def main():
     l2 = 0.2  
     l3 = 0.3  
     # Initial joint values.
-    q0 = -0.02
+    q0 = 0.02
     q1 = -0.15
     # Joint target.
     q_des = 0.6
-    q0_des = 0.03
+    q0_des = -0.03
     q1_des = 0.05
     q0_goal = True
     q1_goal = False
@@ -106,6 +106,7 @@ def main():
         if q0_goal is True:
             lbA[5] = (q0_des-q0)
             ubA[5] = (q0_des-q0)
+            # A[0, 0] = 0.0
             A[5, 0] = 1.0
             A[5, 3] = 1.0
         else:
