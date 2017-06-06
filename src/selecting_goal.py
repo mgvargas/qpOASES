@@ -26,7 +26,7 @@ import numpy as np
 import PyKDL as kdl
 from urdf_parser_py import urdf
 from iai_markers_tracking.msg import Object
-from iai_markers_tracking.srv import ObjGrasping
+from iai_markers_tracking.srv import GetObjectInfo
 from sensor_msgs.msg import JointState
 from urdf_parser_py.urdf import URDF
 from kdl_parser import kdl_tree_from_urdf_model
@@ -125,14 +125,14 @@ class SelectGoal:
 
     def grasping_poses_service(self, goal_obj):
         # Calling a service to obtain the name of the grasping poses of an object
-        rospy.wait_for_service('object_grasping_poses')
+        rospy.wait_for_service('get_object_info')
         try:
-            g_p = rospy.ServiceProxy('object_grasping_poses', ObjGrasping)
+            g_p = rospy.ServiceProxy('get_object_info', GetObjectInfo)
             grasping_poses_list = g_p(goal_obj)
             self.grasping_poses = grasping_poses_list.grasp_poses
         except rospy.ServiceException, e:
             print "Service call failed: %s" % e
-            rospy.logerr("Service 'object_grasping_poses' failed")
+            rospy.logerr("Service 'get_object_info' failed")
 
     def init_gp_weights(self):
         # Initializes the weights of all grasping poses with 0

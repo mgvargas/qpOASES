@@ -30,7 +30,7 @@ import plotly.graph_objs as go
 def main():
     rospy.init_node('controller_2dof', anonymous=True)
     rospy.Rate(10)
-    rospy.sleep(0.2)
+    # rospy.sleep(0.2)
 
     # Setup data of QP.
     # Weights.  
@@ -46,11 +46,11 @@ def main():
     l2 = 0.2  
     l3 = 0.3  
     # Initial joint values.
-    q0 = 0.02
-    q1 = -0.15
+    q0_init = q0 = 0.02
+    q1_init = q1 = -0.15
     # Joint target.
     q_des = 0.6
-    q0_des = -0.03
+    q0_des = -0.025
     q1_des = 0.05
     q0_goal = True
     q1_goal = False
@@ -68,7 +68,7 @@ def main():
     joint_precision = 5e-3
     p = 10
     pj = 5
-    q_eef = l1 + l2 + l3 + q0 + q1
+    q_eef_init = q_eef = l1 + l2 + l3 + q0 + q1
     error = p * (q_des - q_eef)
     vel_init = 0
     nWSR = np.array([100])
@@ -148,6 +148,7 @@ def main():
     pos_1 = np.array(q1)
     vel_0 = np.array(vel_init)
     vel_1 = np.array(vel_init)
+    vel_eef = np.array(vel_init)
     p_error = np.array(error)
     eef_goal = np.array(q_des)
     q0_set = np.array(q0_des)
@@ -226,6 +227,7 @@ def main():
             pos_1 = np.hstack((pos_1, q1))
             vel_0 = np.hstack((vel_0, Opt[0]))
             vel_1 = np.hstack((vel_1, Opt[1]))
+            vel_eef = np.hstack((vel_eef, Opt[0] + Opt[1]))
             p_error = np.hstack((p_error, error))
             eef_goal = np.hstack((eef_goal, q_des))
             q0_set = np.hstack((q0_set, q0_des))
@@ -238,16 +240,19 @@ def main():
             mode='lines+markers', name='pos_eef')
         t_p0 = go.Scatter(
             y=pos_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_0')
+            mode='lines+markers', name='pos_q0')
         t_p1 = go.Scatter(
             y=pos_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_1')
+            mode='lines+markers', name='pos_q1')
         t_v0 = go.Scatter(
             y=vel_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_0')
+            mode='lines+markers', name='vel_q0')
         t_v1 = go.Scatter(
             y=vel_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_1')
+            mode='lines+markers', name='vel_q1')
+        t_veef = go.Scatter(
+            y=vel_eef, x=t, marker=dict(size=4, ),
+            mode='lines+markers', name='vel_eef')
         t_er = go.Scatter(
             y=p_error, x=t, marker=dict(size=4,),
             mode='lines+markers', name='error')
@@ -257,15 +262,40 @@ def main():
         t_g2 = go.Scatter(
             y=q1_set, x=t, marker=dict(size=4,),
             mode='lines', name='joint1_goal')
-        t_g3 = go.Scatter(
+        t_goal = go.Scatter(
             y=eef_goal, x=t, marker=dict(size=4,),
             mode='lines', name='eef_goal')
 
         if q0_goal == True:
-            data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g3]
+            data_q0 = [t_p0, t_v0, t_g1]
+            data_q1 = [t_p1, t_v1]
         else:
-            data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g2, t_g3]
-        plotly.offline.plot(data, filename='joint_goals.html')
+            data_q0 = [t_p0, t_v0]
+            data_q1 = [t_p1, t_v1, t_g2]
+
+        layout = dict(title="Initial position q0 =%g.\n" %(q0_init),
+                      xaxis=dict(title='Iterations', autotick=False, dtick=25, gridwidth=3, tickcolor='#060',),
+                      yaxis=dict(title='Position / Velocity', gridwidth=3,),
+                      )
+        fig0 = dict(data=data_q0, layout=layout)
+        plotly.offline.plot(fig0, filename='joint_goals_q0.html')
+
+
+        layout = dict(title="Initial position q1 = %g.\n" %(q1_init),
+                      xaxis=dict(title='Iterations', autotick=False, dtick=25, gridwidth=3, tickcolor='#060',),
+                      yaxis=dict(title='Position / Velocity', gridwidth=3,),
+                      )
+        fig1 = dict(data=data_q1, layout=layout)
+        plotly.offline.plot(fig1, filename='joint_goals_q1.html')
+
+
+        data_eef = [t_eef, t_veef, t_goal]
+        layout_eef = dict(title="Initial position EEF = %g.  Goal = %g, \n" %
+                                (q_eef_init, q_des),
+                          xaxis=dict(title='Iterations', autotick=False, dtick=25, gridwidth=3, ),
+                          yaxis=dict(title='Position / Velocity', gridwidth=3,))
+        fig = dict(data=data_eef, layout=layout_eef)
+        plotly.offline.plot(fig, filename='joint_goals_eef.html')
 
         print "\n i = ", i
         return 0

@@ -38,7 +38,6 @@ def main():
     w1 = 1e-3
     w2 = 1e-5
     w3 = 1  # slack (attractor)
-    w4 = 1e-3  # slack (range goal)
     # Joint limits.
     q0_max = 0.05
     q1_max = 0.15
@@ -47,15 +46,12 @@ def main():
     l2 = 0.2
     l3 = 0.3
     # Initial joint values.
-    q0 = -0.03
-    q1 = -0.12
+    q0_init = q0 = -0.04
+    q1_init = q1 = -0.08
     # Joint target.
-    q_des = 0.7
-    q_des_min = 0.67
-    q_des_max = 0.72
+    q_des = 0.65
     # Slack limits.
     e_max = 1000
-    e_range_max = 1000
     # Velocity limits.(+-)
     v0_max = 0.05
     v1_max = 0.1
@@ -65,8 +61,7 @@ def main():
     # Others
     precision = 1e-3
     p = 10
-    p_range = 2
-    q_eef = l1 + l2 + l3 + q0 + q1
+    q_eef_init = q_eef = l1 + l2 + l3 + q0 + q1
     error = p * (q_des - q_eef)
     vel_init = 0
     nWSR = np.array([100])
@@ -75,25 +70,23 @@ def main():
     a0_const = (v0_max - a0_max) / v0_max
     a1_const = (v1_max - a1_max) / v1_max
 
-    example = SQProblem(4, 6)
+    example = SQProblem(3, 5)
 
-    H = np.array([w1, 0.0, 0.0, 0.0,
-                  0.0, w2, 0.0, 0.0,
-                  0.0, 0.0, w3, 0.0,
-                  0.0, 0.0, 0.0, w4]).reshape((4, 4))
+    H = np.array([w1, 0.0, 0.0,
+                  0.0, w2, 0.0,
+                  0.0, 0.0, w3]).reshape((3, 3))
 
-    A = np.array([1.0, 1.0, 1.0, 0.0,
-                  1.0, 0.0, 0.0, 0.0,
-                  0.0, 1.0, 0.0, 0.0,
-                  1.0, 0.0, 0.0, 0.0,
-                  0.0, 1.0, 0.0, 0.0,
-                  0.0, 0.0, 0.0, 1.0]).reshape((6, 4))
+    A = np.array([1.0, 1.0, 1.0,
+                  1.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0,
+                  1.0, 0.0, 0.0,
+                  0.0, 1.0, 0.0]).reshape((5, 3))
 
     g = np.array([0.0, 0.0, 0.0, 0.0])
-    lb = np.array([-v0_max, -v1_max, -e_max, -e_range_max])
-    ub = np.array([v0_max, v1_max, e_max, e_range_max])
-    lbA = np.array([error, (-q0_max - q0), (-q1_max - q0), -a0_max, -a1_max, (q_des_min - q_eef)])
-    ubA = np.array([error, (q0_max - q0), (q1_max - q0), a0_max, a1_max, (q_des_max - q_eef)])
+    lb = np.array([-v0_max, -v1_max, -e_max])
+    ub = np.array([v0_max, v1_max, e_max])
+    lbA = np.array([error, (-q0_max - q0), (-q1_max - q0), -a0_max, -a1_max])
+    ubA = np.array([error, (q0_max - q0), (q1_max - q0), a0_max, a1_max])
 
     # Setting up QProblem object
     options = Options()
@@ -109,7 +102,7 @@ def main():
     n = 0
     limit = abs(error)
     ok = False
-    Opt = np.zeros(4)
+    Opt = np.zeros(3)
 
     # Plotting
     t = np.array(i)
@@ -118,9 +111,11 @@ def main():
     pos_1 = np.array(q1)
     vel_0 = np.array(vel_init)
     vel_1 = np.array(vel_init)
+    vel_eef = np.array(vel_init)
     p_error = np.array(error)
-    r_max = np.array(q_des_max)
-    r_min = np.array(q_des_min)
+    goal = np.array(q_des)
+    lim1 = np.array(q0_max)
+    lim2 = np.array(q1_max)
 
     return_value = example.init(H, g, A, lb, ub, lbA, ubA, nWSR)
 
@@ -129,8 +124,7 @@ def main():
         return -1
 
     while not rospy.is_shutdown():
-        # while (limit > precision or not ok) and i < 400:
-        while n < 40 and i < 300:
+        while limit > precision and i < 400:
             # Solve QP.
             i += 1
             nWSR = np.array([100])
@@ -139,13 +133,11 @@ def main():
             lbA[2] = -q1_max - q1
             lbA[3] = a0_const * Opt[0] - a0_max
             lbA[4] = a1_const * Opt[1] - a1_max
-            lbA[5] = p_range * (q_des_min - q_eef)
             ubA[0] = error
             ubA[1] = q0_max - q0
             ubA[2] = q1_max - q1
             ubA[3] = a0_const * Opt[0] + a0_max
             ubA[4] = a1_const * Opt[1] + a1_max
-            ubA[5] = p_range * (q_des_max - q_eef)
 
             return_value = example.hotstart(H, g, A, lb, ub, lbA, ubA, nWSR)
 
@@ -164,55 +156,71 @@ def main():
             # print "\nOpt = [ %g, %g, %g, %g ] \n posit= %g, error= %g, q0= %g q1= %g \n" % (
             #    Opt[0], Opt[1], Opt[2], Opt[3], q_eef, error, q0, q1)
 
-            # Depending on joint goals
-            if q_des_min <= q_eef <= q_des_max:
-                ok = True
-                n += 1
-                print ok
-            else:
-                ok = False
-
             # Plotting arrays
             pos_eef = np.hstack((pos_eef, q_eef))
             pos_0 = np.hstack((pos_0, q0))
             pos_1 = np.hstack((pos_1, q1))
             vel_0 = np.hstack((vel_0, Opt[0]))
             vel_1 = np.hstack((vel_1, Opt[1]))
+            vel_eef = np.hstack((vel_eef, Opt[0]+Opt[1]))
+            goal = np.hstack((goal, q_des))
             p_error = np.hstack((p_error, error))
-            r_max = np.hstack((r_max, q_des_max))
-            r_min = np.hstack((r_min, q_des_min))
             t = np.hstack((t, i))
+            lim1 = np.hstack((lim1, q0_max))
+            lim2 = np.hstack((lim2, q1_max))
 
-        marker = dict(size=4,line=dict(width=1,))
         # Plot
         t_eef = go.Scatter(
             y=pos_eef, x=t, marker=dict(size=4,),
             mode='lines+markers', name='pos_eef')
         t_p0 = go.Scatter(
             y=pos_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_0')
+            mode='lines+markers', name='pos_q0')
         t_p1 = go.Scatter(
             y=pos_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_1')
+            mode='lines+markers', name='pos_q1')
         t_v0 = go.Scatter(
             y=vel_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_0')
+            mode='lines+markers', name='vel_q0')
         t_v1 = go.Scatter(
             y=vel_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_1')
+            mode='lines+markers', name='vel_q1')
+        t_q0 = go.Scatter(
+            y=lim1, x=t, marker=dict(size=4,),
+            mode='lines', name='limit_0')
+        t_q1 = go.Scatter(
+            y=lim2, x=t, marker=dict(size=4,),
+            mode='lines', name='limit_1')
+        t_veef = go.Scatter(
+            y=vel_eef, x=t, marker=dict(size=4, ),
+            mode='lines+markers', name='vel_eef')
         t_er = go.Scatter(
             y=p_error, x=t, marker=dict(size=4,),
             mode='lines+markers', name='error')
-        t_min = go.Scatter(
-            y=r_min, x=t, marker=dict(size=4,),
-            mode='lines', name='min')
-        t_max = go.Scatter(
-            y=r_max, x=t, marker=dict(size=4,),
-            mode='lines', name='max')
+        t_goal = go.Scatter(
+            y=goal, x=t, marker=dict(size=4, ),
+            mode='lines', name='goal')
 
-        data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_min, t_max]
-        plotly.offline.plot(data, filename='goal_range.html')
-        print "\n ok = %g, i = %g \n" % (ok, i)
+        print "\n i = %g \n" % (i)
+
+        data_eef = [t_eef, t_veef, t_goal]
+        layout_eef = dict(title="Initial position EEF = %g.  Goal = %g, \n" %
+                            (q_eef_init, q_des),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2,),
+                      yaxis=dict(title='Position / Velocity'), )
+        fig = dict(data=data_eef, layout=layout_eef)
+        plotly.offline.plot(fig, filename='basic_example_eef.html')
+
+        # data = [t_p0, t_p1, t_v0, t_v1, t_q0, t_q1]
+        data = [t_p0, t_p1, t_v0, t_v1]
+        layout = dict(title="Initial position q0 =%g, q1 = %g.\n" %
+                            (q0_init, q1_init),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2,),
+                      yaxis=dict(title='Position / Velocity'),
+                      )
+        fig = dict(data=data, layout=layout)
+        plotly.offline.plot(fig, filename='basic_example_joints.html')
+
         return 0
 
 
