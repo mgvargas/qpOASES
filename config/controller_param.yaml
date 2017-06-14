@@ -18,11 +18,11 @@ simulated_joints:
 - right_arm_5_joint
 - right_arm_6_joint
 start_config:
-  right_arm_0_joint: -0.53244
-  right_arm_1_joint: -1.9504
-  right_arm_2_joint: -0.00022
-  right_arm_3_joint: 1.85505
-  right_arm_4_joint: -0.7828
-  right_arm_5_joint: -0.1524
-  right_arm_6_joint: -1.8721
+  right_arm_0_joint: 1.035431542036267
+  right_arm_1_joint: -0.6214144842664262
+  right_arm_2_joint: -2.5601793369348207
+  right_arm_3_joint: -1.4676542755818898
+  right_arm_4_joint: -1.2967314329570683
+  right_arm_5_joint: 1.85759378992942
+  right_arm_6_joint: -1.0270237084541678
 watchdog_period: 0.1

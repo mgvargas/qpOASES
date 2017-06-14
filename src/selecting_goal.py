@@ -36,7 +36,7 @@ class SelectGoal:
     def __init__(self):
         rospy.init_node('goal_selector', anonymous=True)
         r = rospy.Rate(2)
-        self.objects = rospy.Subscriber('/detected_objects', Object, self.callback_obj)
+        self.objects = rospy.Subscriber('/found_objects', Object, self.callback_obj)
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer)
 
