@@ -6,7 +6,8 @@ find_package(catkin REQUIRED COMPONENTS roscpp)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp)
+#  CATKIN_DEPENDS roscpp
+)
 
 ##############
 ## Building ##
@@ -45,15 +46,6 @@ add_library(${PROJECT_NAME} ${SRCS})
 # building example applications
 #
 set(EXAMPLES
-  example1
-  example1a
-  example1b
-  example2
-  #example3
-  #example3b
-  example4
-  example5
-  exampleLP
   qrecipe)
  
 foreach(EXAMPLE ${EXAMPLES})
@@ -71,7 +63,7 @@ target_link_libraries(dof2 ${PROJECT_NAME} ${catkin_LIBRARIES})
 add_executable(joint_eef_goal examples/joint_eef_goal.cpp)
 target_link_libraries(joint_eef_goal ${PROJECT_NAME} ${catkin_LIBRARIES})
 
-catkin_package(CATKIN_DEPENDS roscpp)
+#catkin_package(CATKIN_DEPENDS roscpp)
 
 ################
 ## Installing ##

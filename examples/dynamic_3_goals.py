@@ -43,10 +43,10 @@ def main():
     # Links
     l1 = 0.1
     l2 = 0.2
-    l3 = 0.3
+    l3 = 0.25
     # Initial joint values.
-    q0_init = q0 = 0.04
-    q1_init = q1 = 0.08
+    q0_init = q0 = -0.03
+    q1_init = q1 = 0.0
     # Joint target.
     q_des1 = 0.4
     q_des2 = 0.7
@@ -62,7 +62,7 @@ def main():
     a0_max = 0.05 * 0.5
     a1_max = 0.1 * 0.5
     # Others
-    precision = 1e-2
+    precision = 1e-3
     p = 10
     q_eef_init = q_eef = l1 + l2 + l3 + q0 + q1
     error1 = p * (q_des1 - q_eef)
@@ -72,9 +72,6 @@ def main():
     nWSR = np.array([100])
     # Dynamic goal weights
     sum_error = abs(error1) + abs(error2) + abs(error3)
-    '''w3 = ((sum_error - abs(error1)) / sum_error) ** 3  # goal 1 weight
-    w4 = ((sum_error - abs(error2)) / sum_error) ** 3  # goal 2 weight
-    w5 = ((sum_error - abs(error3)) / sum_error) ** 3  # goal 3 weight'''
     min_error = min(abs(error1), abs(error2), abs(error3))
     max_error = max(abs(error1), abs(error2), abs(error3))
     w3 = (1 - (abs(error1) - min_error) / (max_error-min_error)) ** 3  # goal 1 weight
@@ -137,6 +134,7 @@ def main():
     pos_1 = np.array(q1)
     vel_0 = np.array(vel_init)
     vel_1 = np.array(vel_init)
+    vel_eef = np.array(vel_init)
     p_error = np.array(error1)
     go_1 = np.array(q_des1)
     go_2 = np.array(q_des2)
@@ -149,7 +147,7 @@ def main():
         return -1
 
     while not rospy.is_shutdown():
-        while (diff > 0.00005) and lim > precision and i < 400:
+        while (diff > 0.0009) and lim > precision and i < 400:
 
             # Solve QP.
             i += 1
@@ -191,9 +189,9 @@ def main():
             # Update weights
             min_error = min(abs(error1), abs(error2), abs(error3))
             max_error = max(abs(error1), abs(error2), abs(error3))
-            w3 = (1 - (abs(error1) - min_error) / (max_error - min_error)) ** 3  # goal 1 weight
-            w4 = (1 - (abs(error2) - min_error) / (max_error - min_error)) ** 3  # goal 2 weight
-            w5 = (1 - (abs(error3) - min_error) / (max_error - min_error)) ** 3  # goal 3 weight
+            w3 = (1 - (abs(error1) - min_error) / (max_error - min_error)) ** 3  # goal 1
+            w4 = (1 - (abs(error2) - min_error) / (max_error - min_error)) ** 3  # goal 2
+            w5 = (1 - (abs(error3) - min_error) / (max_error - min_error)) ** 3  # goal 3
 
             H = np.array([w1, 0.0, 0.0, 0.0, 0.0,
                           0.0, w2, 0.0, 0.0, 0.0,
@@ -211,8 +209,8 @@ def main():
             diff3 = abs(error3-old_error3)
             diff = min([diff1, diff2, diff3])
 
-            print 'weights= [ %g, %g, %g ]'%(w3, w4, w5)
-            print 'vel = [ %g, %g ], error = [ %g, %g, %g ] \n'% (Opt[0], Opt[1], error1, error2, error3)
+            # print 'weights= [ %g, %g, %g ]'%(w3, w4, w5)
+            # print 'vel = [ %g, %g ], error = [ %g, %g, %g ] \n'% (Opt[0], Opt[1], error1, error2, error3)
 
             # Plotting arrays
             pos_eef = np.hstack((pos_eef, q_eef))
@@ -220,6 +218,7 @@ def main():
             pos_1 = np.hstack((pos_1, q1))
             vel_0 = np.hstack((vel_0, Opt[0]))
             vel_1 = np.hstack((vel_1, Opt[1]))
+            vel_eef = np.hstack((vel_eef, Opt[0]+Opt[1]))
             p_error = np.hstack((p_error, error1))
             go_1 = np.hstack((go_1, q_des1))
             go_2 = np.hstack((go_2, q_des2))
@@ -229,41 +228,60 @@ def main():
         # Plot
         t_eef = go.Scatter(
             y=pos_eef, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_eef')
+            mode='lines', name='pos_eef', line = dict(dash = 'dash'))
         t_p0 = go.Scatter(
             y=pos_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_0')
+            mode='lines', name='pos_0', line = dict(dash = 'dash'))
         t_p1 = go.Scatter(
             y=pos_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_1')
+            mode='lines', name='pos_1', line = dict(dash = 'dash'))
         t_v0 = go.Scatter(
             y=vel_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_0')
+            mode='lines', name='vel_0')
         t_v1 = go.Scatter(
             y=vel_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_1')
+            mode='lines', name='vel_1')
         t_er = go.Scatter(
             y=p_error, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='error')
+            mode='lines', name='error')
+        t_veef = go.Scatter(
+            y=vel_eef, x=t, marker=dict(size=4, ),
+            mode='lines', name='vel_eef')
         t_g1 = go.Scatter(
             y=go_1, x=t, marker=dict(size=4,),
-            mode='lines', name='goal_1')
+            mode='lines', name='goal_1', line = dict(dash = 'dot'))
         t_g2 = go.Scatter(
             y=go_2, x=t, marker=dict(size=4,),
-            mode='lines', name='goal_2')
+            mode='lines', name='goal_2', line = dict(dash = 'dot', width = 4))
         t_g3 = go.Scatter(
             y=go_3, x=t, marker=dict(size=4, ),
-            mode='lines', name='goal_3')
+            mode='lines', name='goal_3', line = dict(dash = 'dot', width = 6))
 
-        data = [t_eef, t_p0, t_p1, t_v0, t_v1, t_g1, t_g2, t_g3]
-        layout = dict(title="Initial position eef = %g, q0 =%g, q1 = %g.  Goals: goal_1 = %g, goal_2 = %g, goal_3 = %g\n" %
-                      (q_eef_init, q0_init, q1_init, q_des1, q_des2, q_des3),
-                      xaxis=dict(title='Iterations'),
-                      yaxis=dict(title='Position / Velocity'),
+        data = [t_eef, t_veef, t_g1, t_g2, t_g3]
+        layout = dict(title="Initial position eef = %g. Goals: goal_1 = %g, goal_2 = %g, goal_3 = %g\n" %
+                      (q_eef_init, q_des1, q_des2, q_des3),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2,),
+                      yaxis=dict(title='Position / Velocity'), font=dict(size=18),
                       )
         fig = dict(data=data, layout=layout)
 
-        plotly.offline.plot(fig, filename='dynamic_weights_3.html')
+        plotly.offline.plot(fig, filename='html/dynamic_3_weights_EEF.html', image='png', image_filename='dyn_3_eef_2')
+
+        data = [t_p0, t_v0]
+        layout = dict(title="Initial position q0 =%g.\n" %(q0_init),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2),
+                      yaxis=dict(title='Position / Velocity',range=[-0.11,.045],), font=dict(size=18),
+                      )
+        fig = dict(data=data, layout=layout)
+        plotly.offline.plot(fig, filename='html/dynamic_3_weights_q0.html')
+
+        data = [t_p1, t_v1]
+        layout = dict(title="Initial position q1 = %g.\n" %(q1_init),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2),
+                      yaxis=dict(title='Position / Velocity',range=[-0.11,.045],), font=dict(size=18),
+                      )
+        fig = dict(data=data, layout=layout)
+        plotly.offline.plot(fig, filename='html/dynamic_3_weights__q1.html')
 
         print "\n i = %g \n" % i
         return 0

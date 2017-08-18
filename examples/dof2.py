@@ -172,19 +172,19 @@ def main():
         # Plot
         t_eef = go.Scatter(
             y=pos_eef, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_eef')
+            mode='lines', name='pos_eef', line = dict(dash = 'dash'))
         t_p0 = go.Scatter(
             y=pos_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_q0')
+            mode='lines', name='pos_q0', line = dict(dash = 'dash'))
         t_p1 = go.Scatter(
             y=pos_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='pos_q1')
+            mode='lines', name='pos_q1', line = dict(dash = 'dash'))
         t_v0 = go.Scatter(
             y=vel_0, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_q0')
+            mode='lines', name='vel_q0')
         t_v1 = go.Scatter(
             y=vel_1, x=t, marker=dict(size=4,),
-            mode='lines+markers', name='vel_q1')
+            mode='lines', name='vel_q1')
         t_q0 = go.Scatter(
             y=lim1, x=t, marker=dict(size=4,),
             mode='lines', name='limit_0')
@@ -193,13 +193,13 @@ def main():
             mode='lines', name='limit_1')
         t_veef = go.Scatter(
             y=vel_eef, x=t, marker=dict(size=4, ),
-            mode='lines+markers', name='vel_eef')
+            mode='lines', name='vel_eef')
         t_er = go.Scatter(
             y=p_error, x=t, marker=dict(size=4,),
             mode='lines+markers', name='error')
         t_goal = go.Scatter(
             y=goal, x=t, marker=dict(size=4, ),
-            mode='lines', name='goal')
+            mode='lines', name='goal', line = dict(dash = 'dot'))
 
         print "\n i = %g \n" % (i)
 
@@ -207,20 +207,27 @@ def main():
         layout_eef = dict(title="Initial position EEF = %g.  Goal = %g, \n" %
                             (q_eef_init, q_des),
                       xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2,),
-                      yaxis=dict(title='Position / Velocity'), )
+                      yaxis=dict(title='Position / Velocity'), font=dict(size=16))
         fig = dict(data=data_eef, layout=layout_eef)
-        plotly.offline.plot(fig, filename='basic_example_eef.html')
+        plotly.offline.plot(fig, filename='html/basic_example_eef.html', image='png', image_filename='basic_eef')
 
-        # data = [t_p0, t_p1, t_v0, t_v1, t_q0, t_q1]
-        data = [t_p0, t_p1, t_v0, t_v1]
+        data = [t_p0, t_v0]
         layout = dict(title="Initial position q0 =%g, q1 = %g.\n" %
                             (q0_init, q1_init),
-                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2,),
-                      yaxis=dict(title='Position / Velocity'),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2),
+                      yaxis=dict(title='Position / Velocity',range=[-0.08,.12],), font=dict(size=18)
                       )
         fig = dict(data=data, layout=layout)
-        plotly.offline.plot(fig, filename='basic_example_joints.html')
+        plotly.offline.plot(fig, filename='html/basic_example_q0.html', image='png', image_filename='basic_0')
 
+        data = [t_p1, t_v1]
+        layout = dict(title="Initial position q0 =%g, q1 = %g.\n" %
+                            (q0_init, q1_init),
+                      xaxis=dict(title='Iterations',autotick=False,dtick=25,gridwidth=2),
+                      yaxis=dict(title='Position / Velocity',range=[-0.08,.12],), font=dict(size=18)
+                      )
+        fig = dict(data=data, layout=layout)
+        plotly.offline.plot(fig, filename='html/basic_example_q1.html', image='png', image_filename='basic_1')
         return 0
 
 
